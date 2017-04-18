@@ -434,8 +434,7 @@ testCompareXMLToArgv(const void *data)
     if (virQEMUCapsGet(info->qemuCaps, QEMU_CAPS_ENABLE_FIPS))
         flags |= FLAG_FIPS;
 
-    if (qemuTestCapsCacheInsert(driver.qemuCapsCache, info->name,
-                                info->qemuCaps) < 0)
+    if (qemuTestCapsCacheInsert(driver.qemuCapsCache, info->qemuCaps) < 0)
         goto cleanup;
 
     if (virAsprintf(&xml, "%s/qemuxml2argvdata/qemuxml2argv-%s.xml",
@@ -473,13 +472,6 @@ testCompareXMLToArgv(const void *data)
 
     if (qemuProcessPrepareMonitorChr(&monitor_chr, priv->libDir) < 0)
         goto cleanup;
-
-    if (STREQ(vm->def->os.machine, "pc") &&
-        STREQ(vm->def->emulator, "/usr/bin/qemu-system-x86_64")) {
-        VIR_FREE(vm->def->os.machine);
-        if (VIR_STRDUP(vm->def->os.machine, "pc-0.11") < 0)
-            goto cleanup;
-    }
 
     if (testUpdateQEMUCaps(info, vm, driver.caps) < 0)
         goto cleanup;
@@ -1349,6 +1341,9 @@ mymain(void)
     DO_TEST("usb-port-missing",
             QEMU_CAPS_CHARDEV, QEMU_CAPS_USB_HUB,
             QEMU_CAPS_NODEFCONFIG);
+    DO_TEST_PARSE_ERROR("usb-bus-missing",
+                        QEMU_CAPS_CHARDEV, QEMU_CAPS_USB_HUB,
+                        QEMU_CAPS_NODEFCONFIG);
     DO_TEST("usb-ports",
             QEMU_CAPS_CHARDEV, QEMU_CAPS_USB_HUB,
             QEMU_CAPS_NODEFCONFIG);

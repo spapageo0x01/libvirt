@@ -81,6 +81,28 @@ virNWFilterObjAssignDef(virNWFilterObjListPtr nwfilters,
 int
 virNWFilterObjTestUnassignDef(virNWFilterObjPtr nwfilter);
 
+typedef bool
+(*virNWFilterObjListFilter)(virConnectPtr conn,
+                            virNWFilterDefPtr def);
+
+int
+virNWFilterObjNumOfNWFilters(virNWFilterObjListPtr nwfilters,
+                             virConnectPtr conn,
+                             virNWFilterObjListFilter aclfilter);
+
+int
+virNWFilterObjGetNames(virNWFilterObjListPtr nwfilters,
+                       virConnectPtr conn,
+                       virNWFilterObjListFilter aclfilter,
+                       char **const names,
+                       int maxnames);
+
+int
+virNWFilterObjListExport(virConnectPtr conn,
+                         virNWFilterObjListPtr nwfilters,
+                         virNWFilterPtr **filters,
+                         virNWFilterObjListFilter aclfilter);
+
 int
 virNWFilterObjLoadAllConfigs(virNWFilterObjListPtr nwfilters,
                              const char *configDir);

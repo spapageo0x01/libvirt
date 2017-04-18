@@ -1582,7 +1582,6 @@ virNodeDeviceDefParseXML(xmlXPathContextPtr ctxt,
     for (i = 0, m = 0; i < n; i++) {
         xmlNodePtr node = nodes[i];
         char *tmp = virXMLPropString(node, "type");
-        virNodeDevDevnodeType type;
         int val;
 
         if (!tmp) {
@@ -1591,15 +1590,17 @@ virNodeDeviceDefParseXML(xmlXPathContextPtr ctxt,
             goto error;
         }
 
-        if ((val = virNodeDevDevnodeTypeFromString(tmp)) < 0) {
+        val = virNodeDevDevnodeTypeFromString(tmp);
+
+        if (val < 0) {
             virReportError(VIR_ERR_CONFIG_UNSUPPORTED,
                            _("unknown devnode type '%s'"), tmp);
             VIR_FREE(tmp);
             goto error;
         }
-        type = val;
+        VIR_FREE(tmp);
 
-        switch (type) {
+        switch ((virNodeDevDevnodeType)val) {
         case VIR_NODE_DEV_DEVNODE_DEV:
             def->devnode = (char*)xmlNodeGetContent(node);
             break;
@@ -2073,6 +2074,13 @@ virNodeDeviceDeleteVport(virConnectPtr conn,
 
         if (!(vhba_parent = virNodeDeviceGetParentName(conn, scsi_host_name)))
             goto cleanup;
+
+        /* If the parent is not a scsi_host, then this is a pool backed
+         * directly to an HBA and there's no vHBA to remove - so we're done */
+        if (!STRPREFIX(vhba_parent, "scsi_host")) {
+            ret = 0;
+            goto cleanup;
+        }
 
         if (virSCSIHostGetNumber(vhba_parent, &parent_host) < 0)
             goto cleanup;

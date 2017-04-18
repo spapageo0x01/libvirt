@@ -195,6 +195,103 @@ virStorageVolDefFindByName(virStoragePoolObjPtr pool,
 }
 
 
+int
+virStoragePoolObjNumOfVolumes(virStorageVolDefListPtr volumes,
+                              virConnectPtr conn,
+                              virStoragePoolDefPtr pooldef,
+                              virStoragePoolVolumeACLFilter aclfilter)
+{
+    int nvolumes = 0;
+    size_t i;
+
+    for (i = 0; i < volumes->count; i++) {
+        virStorageVolDefPtr def = volumes->objs[i];
+        if (aclfilter && !aclfilter(conn, pooldef, def))
+            continue;
+        nvolumes++;
+    }
+
+    return nvolumes;
+}
+
+
+int
+virStoragePoolObjVolumeGetNames(virStorageVolDefListPtr volumes,
+                                virConnectPtr conn,
+                                virStoragePoolDefPtr pooldef,
+                                virStoragePoolVolumeACLFilter aclfilter,
+                                char **const names,
+                                int maxnames)
+{
+    int nnames = 0;
+    size_t i;
+
+    for (i = 0; i < volumes->count && nnames < maxnames; i++) {
+        virStorageVolDefPtr def = volumes->objs[i];
+        if (aclfilter && !aclfilter(conn, pooldef, def))
+            continue;
+        if (VIR_STRDUP(names[nnames], def->name) < 0)
+            goto failure;
+        nnames++;
+    }
+
+    return nnames;
+
+ failure:
+    while (--nnames >= 0)
+        VIR_FREE(names[nnames]);
+
+    return -1;
+}
+
+
+int
+virStoragePoolObjVolumeListExport(virConnectPtr conn,
+                                  virStorageVolDefListPtr volumes,
+                                  virStoragePoolDefPtr pooldef,
+                                  virStorageVolPtr **vols,
+                                  virStoragePoolVolumeACLFilter aclfilter)
+{
+    int ret = -1;
+    size_t i;
+    virStorageVolPtr *tmp_vols = NULL;
+    virStorageVolPtr vol = NULL;
+    int nvols = 0;
+
+    /* Just returns the volumes count */
+    if (!vols) {
+        ret = volumes->count;
+        goto cleanup;
+    }
+
+    if (VIR_ALLOC_N(tmp_vols, volumes->count + 1) < 0)
+        goto cleanup;
+
+    for (i = 0; i < volumes->count; i++) {
+        virStorageVolDefPtr def = volumes->objs[i];
+        if (aclfilter && !aclfilter(conn, pooldef, def))
+            continue;
+        if (!(vol = virGetStorageVol(conn, pooldef->name, def->name, def->key,
+                                     NULL, NULL)))
+            goto cleanup;
+        tmp_vols[nvols++] = vol;
+    }
+
+    *vols = tmp_vols;
+    tmp_vols = NULL;
+    ret = nvols;
+
+ cleanup:
+    if (tmp_vols) {
+        for (i = 0; i < nvols; i++)
+            virObjectUnref(tmp_vols[i]);
+        VIR_FREE(tmp_vols);
+    }
+
+    return ret;
+}
+
+
 virStoragePoolObjPtr
 virStoragePoolObjAssignDef(virStoragePoolObjListPtr pools,
                            virStoragePoolDefPtr def)
@@ -460,6 +557,65 @@ virStoragePoolObjDeleteDef(virStoragePoolObjPtr pool)
 }
 
 
+int
+virStoragePoolObjNumOfStoragePools(virStoragePoolObjListPtr pools,
+                                   virConnectPtr conn,
+                                   bool wantActive,
+                                   virStoragePoolObjListACLFilter aclfilter)
+{
+    int npools = 0;
+    size_t i;
+
+    for (i = 0; i < pools->count; i++) {
+        virStoragePoolObjPtr obj = pools->objs[i];
+        virStoragePoolObjLock(obj);
+        if (!aclfilter || aclfilter(conn, obj->def)) {
+            if (wantActive == virStoragePoolObjIsActive(obj))
+                npools++;
+        }
+        virStoragePoolObjUnlock(obj);
+    }
+
+    return npools;
+}
+
+
+int
+virStoragePoolObjGetNames(virStoragePoolObjListPtr pools,
+                          virConnectPtr conn,
+                          bool wantActive,
+                          virStoragePoolObjListACLFilter aclfilter,
+                          char **const names,
+                          int maxnames)
+{
+    int nnames = 0;
+    size_t i;
+
+    for (i = 0; i < pools->count && nnames < maxnames; i++) {
+        virStoragePoolObjPtr obj = pools->objs[i];
+        virStoragePoolObjLock(obj);
+        if (!aclfilter || aclfilter(conn, obj->def)) {
+            if (wantActive == virStoragePoolObjIsActive(obj)) {
+                if (VIR_STRDUP(names[nnames], obj->def->name) < 0) {
+                    virStoragePoolObjUnlock(obj);
+                    goto failure;
+                }
+                nnames++;
+            }
+        }
+        virStoragePoolObjUnlock(obj);
+    }
+
+    return nnames;
+
+ failure:
+    while (--nnames >= 0)
+        VIR_FREE(names[nnames]);
+
+    return -1;
+}
+
+
 /*
  * virStoragePoolObjIsDuplicate:
  * @doms : virStoragePoolObjListPtr to search
@@ -697,6 +853,124 @@ virStoragePoolSourceISCSIMatch(virStoragePoolObjPtr matchpool,
 }
 
 
+static virStoragePoolObjPtr
+virStoragePoolObjSourceMatchTypeDIR(virStoragePoolObjPtr pool,
+                                    virStoragePoolDefPtr def)
+{
+    if (pool->def->type == VIR_STORAGE_POOL_DIR) {
+        if (STREQ(pool->def->target.path, def->target.path))
+            return pool;
+    } else if (pool->def->type == VIR_STORAGE_POOL_GLUSTER) {
+        if (STREQ(pool->def->source.name, def->source.name) &&
+            STREQ_NULLABLE(pool->def->source.dir, def->source.dir) &&
+            virStoragePoolSourceMatchSingleHost(&pool->def->source,
+                                                &def->source))
+            return pool;
+    } else if (pool->def->type == VIR_STORAGE_POOL_NETFS) {
+        if (STREQ(pool->def->source.dir, def->source.dir) &&
+            virStoragePoolSourceMatchSingleHost(&pool->def->source,
+                                                &def->source))
+            return pool;
+    }
+
+    return NULL;
+}
+
+
+static virStoragePoolObjPtr
+virStoragePoolObjSourceMatchTypeISCSI(virStoragePoolObjPtr pool,
+                                      virStoragePoolDefPtr def,
+                                      virConnectPtr conn)
+{
+    virStorageAdapterPtr pool_adapter = &pool->def->source.adapter;
+    virStorageAdapterPtr def_adapter = &def->source.adapter;
+    virStorageAdapterSCSIHostPtr pool_scsi_host;
+    virStorageAdapterSCSIHostPtr def_scsi_host;
+    virStorageAdapterFCHostPtr pool_fchost;
+    virStorageAdapterFCHostPtr def_fchost;
+    unsigned int pool_hostnum;
+    unsigned int def_hostnum;
+    unsigned int scsi_hostnum;
+
+    if (pool_adapter->type == VIR_STORAGE_ADAPTER_TYPE_FC_HOST &&
+        def_adapter->type == VIR_STORAGE_ADAPTER_TYPE_FC_HOST) {
+        pool_fchost = &pool_adapter->data.fchost;
+        def_fchost = &def_adapter->data.fchost;
+
+        if (STREQ(pool_fchost->wwnn, def_fchost->wwnn) &&
+            STREQ(pool_fchost->wwpn, def_fchost->wwpn))
+            return pool;
+    } else if (pool_adapter->type == VIR_STORAGE_ADAPTER_TYPE_SCSI_HOST &&
+               def_adapter->type == VIR_STORAGE_ADAPTER_TYPE_SCSI_HOST) {
+        pool_scsi_host = &pool_adapter->data.scsi_host;
+        def_scsi_host = &def_adapter->data.scsi_host;
+
+        if (pool_scsi_host->has_parent &&
+            def_scsi_host->has_parent &&
+            matchSCSIAdapterParent(pool_scsi_host, def_scsi_host))
+            return pool;
+
+        if (getSCSIHostNumber(pool_scsi_host, &pool_hostnum) < 0 ||
+            getSCSIHostNumber(def_scsi_host, &def_hostnum) < 0)
+            return NULL;
+        if (pool_hostnum == def_hostnum)
+            return pool;
+    } else if (pool_adapter->type == VIR_STORAGE_ADAPTER_TYPE_FC_HOST &&
+               def_adapter->type == VIR_STORAGE_ADAPTER_TYPE_SCSI_HOST) {
+        pool_fchost = &pool_adapter->data.fchost;
+        def_scsi_host = &def_adapter->data.scsi_host;
+
+        /* Get the scsi_hostN for the scsi_host source adapter def */
+        if (getSCSIHostNumber(def_scsi_host, &scsi_hostnum) < 0)
+            return NULL;
+
+        if (matchFCHostToSCSIHost(conn, pool_fchost, scsi_hostnum))
+            return pool;
+
+    } else if (pool_adapter->type == VIR_STORAGE_ADAPTER_TYPE_SCSI_HOST &&
+               def_adapter->type == VIR_STORAGE_ADAPTER_TYPE_FC_HOST) {
+        pool_scsi_host = &pool_adapter->data.scsi_host;
+        def_fchost = &def_adapter->data.fchost;
+
+        if (getSCSIHostNumber(pool_scsi_host, &scsi_hostnum) < 0)
+            return NULL;
+
+        if (matchFCHostToSCSIHost(conn, def_fchost, scsi_hostnum))
+            return pool;
+    }
+
+    return NULL;
+}
+
+
+static virStoragePoolObjPtr
+virStoragePoolObjSourceMatchTypeDEVICE(virStoragePoolObjPtr pool,
+                                       virStoragePoolDefPtr def)
+{
+    virStoragePoolObjPtr matchpool = NULL;
+
+    if (pool->def->type == VIR_STORAGE_POOL_ISCSI) {
+        if (def->type != VIR_STORAGE_POOL_ISCSI)
+            return NULL;
+
+        if ((matchpool = virStoragePoolSourceFindDuplicateDevices(pool, def))) {
+            if (!virStoragePoolSourceISCSIMatch(matchpool, def))
+                return NULL;
+        }
+        return matchpool;
+    }
+
+    if (def->type == VIR_STORAGE_POOL_ISCSI)
+        return NULL;
+
+    /* VIR_STORAGE_POOL_FS
+     * VIR_STORAGE_POOL_LOGICAL
+     * VIR_STORAGE_POOL_DISK
+     * VIR_STORAGE_POOL_ZFS */
+    return virStoragePoolSourceFindDuplicateDevices(pool, def);
+}
+
+
 int
 virStoragePoolObjSourceFindDuplicate(virConnectPtr conn,
                                      virStoragePoolObjListPtr pools,
@@ -706,14 +980,10 @@ virStoragePoolObjSourceFindDuplicate(virConnectPtr conn,
     int ret = 1;
     virStoragePoolObjPtr pool = NULL;
     virStoragePoolObjPtr matchpool = NULL;
-    virStorageAdapterPtr pool_adapter;
-    virStorageAdapterPtr def_adapter;
 
     /* Check the pool list for duplicate underlying storage */
     for (i = 0; i < pools->count; i++) {
         pool = pools->objs[i];
-        if (def->type != pool->def->type)
-            continue;
 
         /* Don't match against ourself if re-defining existing pool ! */
         if (STREQ(pool->def->name, def->name))
@@ -723,125 +993,50 @@ virStoragePoolObjSourceFindDuplicate(virConnectPtr conn,
 
         switch ((virStoragePoolType)pool->def->type) {
         case VIR_STORAGE_POOL_DIR:
-            if (STREQ(pool->def->target.path, def->target.path))
-                matchpool = pool;
-            break;
-
         case VIR_STORAGE_POOL_GLUSTER:
-            if (STREQ(pool->def->source.name, def->source.name) &&
-                STREQ_NULLABLE(pool->def->source.dir, def->source.dir) &&
-                virStoragePoolSourceMatchSingleHost(&pool->def->source,
-                                                    &def->source))
-                matchpool = pool;
-            break;
-
         case VIR_STORAGE_POOL_NETFS:
-            if (STREQ(pool->def->source.dir, def->source.dir) &&
-                virStoragePoolSourceMatchSingleHost(&pool->def->source,
-                                                    &def->source))
-                matchpool = pool;
+            if (def->type == pool->def->type)
+                matchpool = virStoragePoolObjSourceMatchTypeDIR(pool, def);
             break;
 
         case VIR_STORAGE_POOL_SCSI:
-            pool_adapter = &pool->def->source.adapter;
-            def_adapter = &def->source.adapter;
-
-            if (pool_adapter->type == VIR_STORAGE_ADAPTER_TYPE_FC_HOST &&
-                def_adapter->type == VIR_STORAGE_ADAPTER_TYPE_FC_HOST) {
-                virStorageAdapterFCHostPtr pool_fchost =
-                    &pool_adapter->data.fchost;
-                virStorageAdapterFCHostPtr def_fchost =
-                    &def_adapter->data.fchost;
-
-                if (STREQ(pool_fchost->wwnn, def_fchost->wwnn) &&
-                    STREQ(pool_fchost->wwpn, def_fchost->wwpn))
-                    matchpool = pool;
-            } else if (pool_adapter->type ==
-                       VIR_STORAGE_ADAPTER_TYPE_SCSI_HOST &&
-                       def_adapter->type ==
-                       VIR_STORAGE_ADAPTER_TYPE_SCSI_HOST) {
-                virStorageAdapterSCSIHostPtr pool_scsi_host =
-                    &pool_adapter->data.scsi_host;
-                virStorageAdapterSCSIHostPtr def_scsi_host =
-                    &def_adapter->data.scsi_host;
-                unsigned int pool_hostnum, def_hostnum;
-
-                if (pool_scsi_host->has_parent &&
-                    def_scsi_host->has_parent &&
-                    matchSCSIAdapterParent(pool_scsi_host, def_scsi_host)) {
-                    matchpool = pool;
-                    break;
-                }
-
-                if (getSCSIHostNumber(pool_scsi_host, &pool_hostnum) < 0 ||
-                    getSCSIHostNumber(def_scsi_host, &def_hostnum) < 0)
-                    break;
-                if (pool_hostnum == def_hostnum)
-                    matchpool = pool;
-            } else if (pool_adapter->type ==
-                       VIR_STORAGE_ADAPTER_TYPE_FC_HOST &&
-                       def_adapter->type ==
-                       VIR_STORAGE_ADAPTER_TYPE_SCSI_HOST) {
-                virStorageAdapterFCHostPtr pool_fchost =
-                    &pool_adapter->data.fchost;
-                virStorageAdapterSCSIHostPtr def_scsi_host =
-                    &def_adapter->data.scsi_host;
-                unsigned int scsi_hostnum;
-
-                /* Get the scsi_hostN for the scsi_host source adapter def */
-                if (getSCSIHostNumber(def_scsi_host, &scsi_hostnum) < 0)
-                    break;
-
-                if (matchFCHostToSCSIHost(conn, pool_fchost, scsi_hostnum)) {
-                    matchpool = pool;
-                    break;
-                }
-
-            } else if (pool_adapter->type ==
-                       VIR_STORAGE_ADAPTER_TYPE_SCSI_HOST &&
-                       def_adapter->type ==
-                       VIR_STORAGE_ADAPTER_TYPE_FC_HOST) {
-                virStorageAdapterSCSIHostPtr pool_scsi_host =
-                    &pool_adapter->data.scsi_host;
-                virStorageAdapterFCHostPtr def_fchost =
-                    &def_adapter->data.fchost;
-                unsigned int scsi_hostnum;
-
-                if (getSCSIHostNumber(pool_scsi_host, &scsi_hostnum) < 0)
-                    break;
-
-                if (matchFCHostToSCSIHost(conn, def_fchost, scsi_hostnum)) {
-                    matchpool = pool;
-                    break;
-                }
-            }
+            if (def->type == pool->def->type)
+                matchpool = virStoragePoolObjSourceMatchTypeISCSI(pool, def,
+                                                                  conn);
             break;
+
         case VIR_STORAGE_POOL_ISCSI:
-            matchpool = virStoragePoolSourceFindDuplicateDevices(pool, def);
-            if (matchpool) {
-                if (!virStoragePoolSourceISCSIMatch(matchpool, def))
-                    matchpool = NULL;
-            }
-            break;
         case VIR_STORAGE_POOL_FS:
         case VIR_STORAGE_POOL_LOGICAL:
         case VIR_STORAGE_POOL_DISK:
         case VIR_STORAGE_POOL_ZFS:
-            matchpool = virStoragePoolSourceFindDuplicateDevices(pool, def);
+            if (def->type == VIR_STORAGE_POOL_ISCSI ||
+                def->type == VIR_STORAGE_POOL_FS ||
+                def->type == VIR_STORAGE_POOL_LOGICAL ||
+                def->type == VIR_STORAGE_POOL_DISK ||
+                def->type == VIR_STORAGE_POOL_ZFS)
+                matchpool = virStoragePoolObjSourceMatchTypeDEVICE(pool, def);
             break;
+
         case VIR_STORAGE_POOL_SHEEPDOG:
-            if (virStoragePoolSourceMatchSingleHost(&pool->def->source,
+            if (def->type == pool->def->type &&
+                virStoragePoolSourceMatchSingleHost(&pool->def->source,
                                                     &def->source))
                 matchpool = pool;
             break;
+
         case VIR_STORAGE_POOL_MPATH:
             /* Only one mpath pool is valid per host */
-            matchpool = pool;
-            break;
-        case VIR_STORAGE_POOL_VSTORAGE:
-            if (STREQ(pool->def->source.name, def->source.name))
+            if (def->type == pool->def->type)
                 matchpool = pool;
             break;
+
+        case VIR_STORAGE_POOL_VSTORAGE:
+            if (def->type == pool->def->type &&
+                STREQ(pool->def->source.name, def->source.name))
+                matchpool = pool;
+            break;
+
         case VIR_STORAGE_POOL_RBD:
 	case VIR_STORAGE_POOL_VICINITY:
         case VIR_STORAGE_POOL_LAST:
@@ -944,7 +1139,7 @@ virStoragePoolMatch(virStoragePoolObjPtr poolobj,
 
 int
 virStoragePoolObjListExport(virConnectPtr conn,
-                            virStoragePoolObjList poolobjs,
+                            virStoragePoolObjListPtr poolobjs,
                             virStoragePoolPtr **pools,
                             virStoragePoolObjListFilter filter,
                             unsigned int flags)
@@ -955,11 +1150,11 @@ virStoragePoolObjListExport(virConnectPtr conn,
     int ret = -1;
     size_t i;
 
-    if (pools && VIR_ALLOC_N(tmp_pools, poolobjs.count + 1) < 0)
+    if (pools && VIR_ALLOC_N(tmp_pools, poolobjs->count + 1) < 0)
         goto cleanup;
 
-    for (i = 0; i < poolobjs.count; i++) {
-        virStoragePoolObjPtr poolobj = poolobjs.objs[i];
+    for (i = 0; i < poolobjs->count; i++) {
+        virStoragePoolObjPtr poolobj = poolobjs->objs[i];
         virStoragePoolObjLock(poolobj);
         if ((!filter || filter(conn, poolobj->def)) &&
             virStoragePoolMatch(poolobj, flags)) {

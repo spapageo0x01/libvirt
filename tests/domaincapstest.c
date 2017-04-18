@@ -522,6 +522,10 @@ mymain(void)
                  "/usr/bin/qemu-system-x86_64", NULL,
                  "x86_64", VIR_DOMAIN_VIRT_KVM);
 
+    DO_TEST_QEMU("2.9.0", "caps_2.9.0",
+                 "/usr/bin/qemu-system-x86_64", "q35",
+                 "x86_64", VIR_DOMAIN_VIRT_KVM);
+
     DO_TEST_QEMU("2.9.0-tcg", "caps_2.9.0",
                  "/usr/bin/qemu-system-x86_64", NULL,
                  "x86_64", VIR_DOMAIN_VIRT_QEMU);
@@ -533,6 +537,8 @@ mymain(void)
     DO_TEST_QEMU("2.8.0", "caps_2.8.0",
                  "/usr/bin/qemu-system-s390x", NULL,
                  "s390x", VIR_DOMAIN_VIRT_KVM);
+
+    virObjectUnref(cfg);
 
 #endif /* WITH_QEMU */
 

@@ -2467,7 +2467,7 @@ static int testDomainGetVcpus(virDomainPtr domain,
     virDomainObjPtr privdom;
     virDomainDefPtr def;
     size_t i;
-    int maxcpu, hostcpus;
+    int hostcpus;
     int ret = -1;
     struct timeval tv;
     unsigned long long statbase;
@@ -2493,10 +2493,6 @@ static int testDomainGetVcpus(virDomainPtr domain,
     statbase = (tv.tv_sec * 1000UL * 1000UL) + tv.tv_usec;
 
     hostcpus = VIR_NODEINFO_MAXCPUS(privconn->nodeInfo);
-    maxcpu = maplen * 8;
-    if (maxcpu > hostcpus)
-        maxcpu = hostcpus;
-
     if (!(allcpumap = virBitmapNew(hostcpus)))
         goto cleanup;
 
@@ -3646,100 +3642,67 @@ testInterfaceObjFindByName(testDriverPtr privconn,
 }
 
 
-static int testConnectNumOfInterfaces(virConnectPtr conn)
+static int
+testConnectNumOfInterfaces(virConnectPtr conn)
 {
     testDriverPtr privconn = conn->privateData;
-    size_t i;
-    int count = 0;
+    int ninterfaces;
 
     testDriverLock(privconn);
-    for (i = 0; (i < privconn->ifaces.count); i++) {
-        virInterfaceObjLock(privconn->ifaces.objs[i]);
-        if (virInterfaceObjIsActive(privconn->ifaces.objs[i]))
-            count++;
-        virInterfaceObjUnlock(privconn->ifaces.objs[i]);
-    }
+    ninterfaces = virInterfaceObjNumOfInterfaces(&privconn->ifaces, true);
     testDriverUnlock(privconn);
-    return count;
+    return ninterfaces;
 }
 
-static int testConnectListInterfaces(virConnectPtr conn, char **const names, int nnames)
+
+static int
+testConnectListInterfaces(virConnectPtr conn,
+                          char **const names,
+                          int maxnames)
 {
     testDriverPtr privconn = conn->privateData;
-    int n = 0;
-    size_t i;
+    int nnames;
 
     testDriverLock(privconn);
-    memset(names, 0, sizeof(*names)*nnames);
-    for (i = 0; (i < privconn->ifaces.count) && (n < nnames); i++) {
-        virInterfaceObjLock(privconn->ifaces.objs[i]);
-        if (virInterfaceObjIsActive(privconn->ifaces.objs[i])) {
-            if (VIR_STRDUP(names[n++], privconn->ifaces.objs[i]->def->name) < 0) {
-                virInterfaceObjUnlock(privconn->ifaces.objs[i]);
-                goto error;
-            }
-        }
-        virInterfaceObjUnlock(privconn->ifaces.objs[i]);
-    }
+    nnames = virInterfaceObjGetNames(&privconn->ifaces, true, names, maxnames);
     testDriverUnlock(privconn);
 
-    return n;
-
- error:
-    for (n = 0; n < nnames; n++)
-        VIR_FREE(names[n]);
-    testDriverUnlock(privconn);
-    return -1;
+    return nnames;
 }
 
-static int testConnectNumOfDefinedInterfaces(virConnectPtr conn)
+
+static int
+testConnectNumOfDefinedInterfaces(virConnectPtr conn)
 {
     testDriverPtr privconn = conn->privateData;
-    size_t i;
-    int count = 0;
+    int ninterfaces;
 
     testDriverLock(privconn);
-    for (i = 0; i < privconn->ifaces.count; i++) {
-        virInterfaceObjLock(privconn->ifaces.objs[i]);
-        if (!virInterfaceObjIsActive(privconn->ifaces.objs[i]))
-            count++;
-        virInterfaceObjUnlock(privconn->ifaces.objs[i]);
-    }
+    ninterfaces = virInterfaceObjNumOfInterfaces(&privconn->ifaces, false);
     testDriverUnlock(privconn);
-    return count;
+    return ninterfaces;
 }
 
-static int testConnectListDefinedInterfaces(virConnectPtr conn, char **const names, int nnames)
+
+static int
+testConnectListDefinedInterfaces(virConnectPtr conn,
+                                 char **const names,
+                                 int maxnames)
 {
     testDriverPtr privconn = conn->privateData;
-    int n = 0;
-    size_t i;
+    int nnames;
 
     testDriverLock(privconn);
-    memset(names, 0, sizeof(*names)*nnames);
-    for (i = 0; (i < privconn->ifaces.count) && (n < nnames); i++) {
-        virInterfaceObjLock(privconn->ifaces.objs[i]);
-        if (!virInterfaceObjIsActive(privconn->ifaces.objs[i])) {
-            if (VIR_STRDUP(names[n++], privconn->ifaces.objs[i]->def->name) < 0) {
-                virInterfaceObjUnlock(privconn->ifaces.objs[i]);
-                goto error;
-            }
-        }
-        virInterfaceObjUnlock(privconn->ifaces.objs[i]);
-    }
+    nnames = virInterfaceObjGetNames(&privconn->ifaces, false, names, maxnames);
     testDriverUnlock(privconn);
 
-    return n;
-
- error:
-    for (n = 0; n < nnames; n++)
-        VIR_FREE(names[n]);
-    testDriverUnlock(privconn);
-    return -1;
+    return nnames;
 }
 
-static virInterfacePtr testInterfaceLookupByName(virConnectPtr conn,
-                                                 const char *name)
+
+static virInterfacePtr
+testInterfaceLookupByName(virConnectPtr conn,
+                          const char *name)
 {
     testDriverPtr privconn = conn->privateData;
     virInterfaceObjPtr iface;
@@ -3756,8 +3719,10 @@ static virInterfacePtr testInterfaceLookupByName(virConnectPtr conn,
     return ret;
 }
 
-static virInterfacePtr testInterfaceLookupByMACString(virConnectPtr conn,
-                                                      const char *mac)
+
+static virInterfacePtr
+testInterfaceLookupByMACString(virConnectPtr conn,
+                               const char *mac)
 {
     testDriverPtr privconn = conn->privateData;
     virInterfaceObjPtr iface;
@@ -3786,7 +3751,9 @@ static virInterfacePtr testInterfaceLookupByMACString(virConnectPtr conn,
     return ret;
 }
 
-static int testInterfaceIsActive(virInterfacePtr iface)
+
+static int
+testInterfaceIsActive(virInterfacePtr iface)
 {
     testDriverPtr privconn = iface->conn->privateData;
     virInterfaceObjPtr obj;
@@ -3803,8 +3770,10 @@ static int testInterfaceIsActive(virInterfacePtr iface)
     return ret;
 }
 
-static int testInterfaceChangeBegin(virConnectPtr conn,
-                                    unsigned int flags)
+
+static int
+testInterfaceChangeBegin(virConnectPtr conn,
+                         unsigned int flags)
 {
     testDriverPtr privconn = conn->privateData;
     int ret = -1;
@@ -3830,8 +3799,10 @@ static int testInterfaceChangeBegin(virConnectPtr conn,
     return ret;
 }
 
-static int testInterfaceChangeCommit(virConnectPtr conn,
-                                     unsigned int flags)
+
+static int
+testInterfaceChangeCommit(virConnectPtr conn,
+                          unsigned int flags)
 {
     testDriverPtr privconn = conn->privateData;
     int ret = -1;
@@ -3858,8 +3829,10 @@ static int testInterfaceChangeCommit(virConnectPtr conn,
     return ret;
 }
 
-static int testInterfaceChangeRollback(virConnectPtr conn,
-                                       unsigned int flags)
+
+static int
+testInterfaceChangeRollback(virConnectPtr conn,
+                            unsigned int flags)
 {
     testDriverPtr privconn = conn->privateData;
     int ret = -1;
@@ -3890,8 +3863,10 @@ static int testInterfaceChangeRollback(virConnectPtr conn,
     return ret;
 }
 
-static char *testInterfaceGetXMLDesc(virInterfacePtr iface,
-                                     unsigned int flags)
+
+static char *
+testInterfaceGetXMLDesc(virInterfacePtr iface,
+                        unsigned int flags)
 {
     testDriverPtr privconn = iface->conn->privateData;
     virInterfaceObjPtr privinterface;
@@ -3911,8 +3886,10 @@ static char *testInterfaceGetXMLDesc(virInterfacePtr iface,
 }
 
 
-static virInterfacePtr testInterfaceDefineXML(virConnectPtr conn, const char *xmlStr,
-                                              unsigned int flags)
+static virInterfacePtr
+testInterfaceDefineXML(virConnectPtr conn,
+                       const char *xmlStr,
+                       unsigned int flags)
 {
     testDriverPtr privconn = conn->privateData;
     virInterfaceDefPtr def;
@@ -3939,7 +3916,9 @@ static virInterfacePtr testInterfaceDefineXML(virConnectPtr conn, const char *xm
     return ret;
 }
 
-static int testInterfaceUndefine(virInterfacePtr iface)
+
+static int
+testInterfaceUndefine(virInterfacePtr iface)
 {
     testDriverPtr privconn = iface->conn->privateData;
     virInterfaceObjPtr privinterface;
@@ -3956,8 +3935,10 @@ static int testInterfaceUndefine(virInterfacePtr iface)
     return ret;
 }
 
-static int testInterfaceCreate(virInterfacePtr iface,
-                               unsigned int flags)
+
+static int
+testInterfaceCreate(virInterfacePtr iface,
+                    unsigned int flags)
 {
     testDriverPtr privconn = iface->conn->privateData;
     virInterfaceObjPtr privinterface;
@@ -3983,8 +3964,10 @@ static int testInterfaceCreate(virInterfacePtr iface,
     return ret;
 }
 
-static int testInterfaceDestroy(virInterfacePtr iface,
-                                unsigned int flags)
+
+static int
+testInterfaceDestroy(virInterfacePtr iface,
+                     unsigned int flags)
 {
     testDriverPtr privconn = iface->conn->privateData;
     virInterfaceObjPtr privinterface;
@@ -4115,101 +4098,68 @@ testStoragePoolLookupByVolume(virStorageVolPtr vol)
     return testStoragePoolLookupByName(vol->conn, vol->pool);
 }
 
+
 static int
 testConnectNumOfStoragePools(virConnectPtr conn)
 {
     testDriverPtr privconn = conn->privateData;
     int numActive = 0;
-    size_t i;
 
     testDriverLock(privconn);
-    for (i = 0; i < privconn->pools.count; i++)
-        if (virStoragePoolObjIsActive(privconn->pools.objs[i]))
-            numActive++;
+    numActive = virStoragePoolObjNumOfStoragePools(&privconn->pools, conn,
+                                                   true, NULL);
     testDriverUnlock(privconn);
 
     return numActive;
 }
 
+
 static int
 testConnectListStoragePools(virConnectPtr conn,
                             char **const names,
-                            int nnames)
+                            int maxnames)
 {
     testDriverPtr privconn = conn->privateData;
     int n = 0;
-    size_t i;
 
     testDriverLock(privconn);
-    memset(names, 0, sizeof(*names)*nnames);
-    for (i = 0; i < privconn->pools.count && n < nnames; i++) {
-        virStoragePoolObjLock(privconn->pools.objs[i]);
-        if (virStoragePoolObjIsActive(privconn->pools.objs[i]) &&
-            VIR_STRDUP(names[n++], privconn->pools.objs[i]->def->name) < 0) {
-            virStoragePoolObjUnlock(privconn->pools.objs[i]);
-            goto error;
-        }
-        virStoragePoolObjUnlock(privconn->pools.objs[i]);
-    }
+    n = virStoragePoolObjGetNames(&privconn->pools, conn, true, NULL,
+                                  names, maxnames);
     testDriverUnlock(privconn);
 
     return n;
-
- error:
-    for (n = 0; n < nnames; n++)
-        VIR_FREE(names[n]);
-    testDriverUnlock(privconn);
-    return -1;
 }
+
 
 static int
 testConnectNumOfDefinedStoragePools(virConnectPtr conn)
 {
     testDriverPtr privconn = conn->privateData;
     int numInactive = 0;
-    size_t i;
 
     testDriverLock(privconn);
-    for (i = 0; i < privconn->pools.count; i++) {
-        virStoragePoolObjLock(privconn->pools.objs[i]);
-        if (!virStoragePoolObjIsActive(privconn->pools.objs[i]))
-            numInactive++;
-        virStoragePoolObjUnlock(privconn->pools.objs[i]);
-    }
+    numInactive = virStoragePoolObjNumOfStoragePools(&privconn->pools, conn,
+                                                     false, NULL);
     testDriverUnlock(privconn);
 
     return numInactive;
 }
 
+
 static int
 testConnectListDefinedStoragePools(virConnectPtr conn,
                                    char **const names,
-                                   int nnames)
+                                   int maxnames)
 {
     testDriverPtr privconn = conn->privateData;
     int n = 0;
-    size_t i;
 
     testDriverLock(privconn);
-    memset(names, 0, sizeof(*names)*nnames);
-    for (i = 0; i < privconn->pools.count && n < nnames; i++) {
-        virStoragePoolObjLock(privconn->pools.objs[i]);
-        if (!virStoragePoolObjIsActive(privconn->pools.objs[i]) &&
-            VIR_STRDUP(names[n++], privconn->pools.objs[i]->def->name) < 0) {
-            virStoragePoolObjUnlock(privconn->pools.objs[i]);
-            goto error;
-        }
-        virStoragePoolObjUnlock(privconn->pools.objs[i]);
-    }
+    n = virStoragePoolObjGetNames(&privconn->pools, conn, false, NULL,
+                                  names, maxnames);
     testDriverUnlock(privconn);
 
     return n;
-
- error:
-    for (n = 0; n < nnames; n++)
-        VIR_FREE(names[n]);
-    testDriverUnlock(privconn);
-    return -1;
 }
 
 static int
@@ -4223,7 +4173,7 @@ testConnectListAllStoragePools(virConnectPtr conn,
     virCheckFlags(VIR_CONNECT_LIST_STORAGE_POOLS_FILTERS_ALL, -1);
 
     testDriverLock(privconn);
-    ret = virStoragePoolObjListExport(conn, privconn->pools, pools,
+    ret = virStoragePoolObjListExport(conn, &privconn->pools, pools,
                                       NULL, flags);
     testDriverUnlock(privconn);
 
@@ -4821,13 +4771,15 @@ testStoragePoolNumOfVolumes(virStoragePoolPtr pool)
         goto cleanup;
     }
 
-    ret = privpool->volumes.count;
+    ret = virStoragePoolObjNumOfVolumes(&privpool->volumes, pool->conn,
+                                        privpool->def, NULL);
 
  cleanup:
     if (privpool)
         virStoragePoolObjUnlock(privpool);
     return ret;
 }
+
 
 static int
 testStoragePoolListVolumes(virStoragePoolPtr pool,
@@ -4836,13 +4788,10 @@ testStoragePoolListVolumes(virStoragePoolPtr pool,
 {
     testDriverPtr privconn = pool->conn->privateData;
     virStoragePoolObjPtr privpool;
-    size_t i = 0;
-    int n = 0;
-
-    memset(names, 0, maxnames * sizeof(*names));
+    int n = -1;
 
     if (!(privpool = testStoragePoolObjFindByName(privconn, pool->name)))
-        goto cleanup;
+        return -1;
 
     if (!virStoragePoolObjIsActive(privpool)) {
         virReportError(VIR_ERR_OPERATION_INVALID,
@@ -4850,23 +4799,14 @@ testStoragePoolListVolumes(virStoragePoolPtr pool,
         goto cleanup;
     }
 
-    for (i = 0; i < privpool->volumes.count && n < maxnames; i++) {
-        if (VIR_STRDUP(names[n++], privpool->volumes.objs[i]->name) < 0)
-            goto cleanup;
-    }
-
-    virStoragePoolObjUnlock(privpool);
-    return n;
+    n = virStoragePoolObjVolumeGetNames(&privpool->volumes, pool->conn,
+                                        privpool->def, NULL, names, maxnames);
 
  cleanup:
-    for (n = 0; n < maxnames; n++)
-        VIR_FREE(names[i]);
-
-    memset(names, 0, maxnames * sizeof(*names));
-    if (privpool)
-        virStoragePoolObjUnlock(privpool);
-    return -1;
+    virStoragePoolObjUnlock(privpool);
+    return n;
 }
+
 
 static int
 testStoragePoolListAllVolumes(virStoragePoolPtr obj,
@@ -4875,16 +4815,12 @@ testStoragePoolListAllVolumes(virStoragePoolPtr obj,
 {
     testDriverPtr privconn = obj->conn->privateData;
     virStoragePoolObjPtr pool;
-    size_t i;
-    virStorageVolPtr *tmp_vols = NULL;
-    virStorageVolPtr vol = NULL;
-    int nvols = 0;
     int ret = -1;
 
     virCheckFlags(0, -1);
 
     if (!(pool = testStoragePoolObjFindByUUID(privconn, obj->uuid)))
-        goto cleanup;
+        return -1;
 
     if (!virStoragePoolObjIsActive(pool)) {
         virReportError(VIR_ERR_OPERATION_INVALID, "%s",
@@ -4892,39 +4828,11 @@ testStoragePoolListAllVolumes(virStoragePoolPtr obj,
         goto cleanup;
     }
 
-     /* Just returns the volumes count */
-    if (!vols) {
-        ret = pool->volumes.count;
-        goto cleanup;
-    }
-
-    if (VIR_ALLOC_N(tmp_vols, pool->volumes.count + 1) < 0)
-         goto cleanup;
-
-    for (i = 0; i < pool->volumes.count; i++) {
-        if (!(vol = virGetStorageVol(obj->conn, pool->def->name,
-                                     pool->volumes.objs[i]->name,
-                                     pool->volumes.objs[i]->key,
-                                     NULL, NULL)))
-            goto cleanup;
-        tmp_vols[nvols++] = vol;
-    }
-
-    *vols = tmp_vols;
-    tmp_vols = NULL;
-    ret = nvols;
+    ret = virStoragePoolObjVolumeListExport(obj->conn, &pool->volumes,
+                                            pool->def, vols, NULL);
 
  cleanup:
-    if (tmp_vols) {
-        for (i = 0; i < nvols; i++) {
-            if (tmp_vols[i])
-                virStorageVolFree(tmp_vols[i]);
-        }
-        VIR_FREE(tmp_vols);
-    }
-
-    if (pool)
-        virStoragePoolObjUnlock(pool);
+    virStoragePoolObjUnlock(pool);
 
     return ret;
 }
@@ -5385,19 +5293,16 @@ testNodeNumOfDevices(virConnectPtr conn,
 {
     testDriverPtr driver = conn->privateData;
     int ndevs = 0;
-    size_t i;
 
     virCheckFlags(0, -1);
 
     testDriverLock(driver);
-    for (i = 0; i < driver->devs.count; i++)
-        if ((cap == NULL) ||
-            virNodeDeviceObjHasCap(driver->devs.objs[i], cap))
-            ++ndevs;
+    ndevs = virNodeDeviceObjNumOfDevices(&driver->devs, conn, cap, NULL);
     testDriverUnlock(driver);
 
     return ndevs;
 }
+
 
 static int
 testNodeListDevices(virConnectPtr conn,
@@ -5407,34 +5312,18 @@ testNodeListDevices(virConnectPtr conn,
                     unsigned int flags)
 {
     testDriverPtr driver = conn->privateData;
-    int ndevs = 0;
-    size_t i;
+    int nnames = 0;
 
     virCheckFlags(0, -1);
 
     testDriverLock(driver);
-    for (i = 0; i < driver->devs.count && ndevs < maxnames; i++) {
-        virNodeDeviceObjLock(driver->devs.objs[i]);
-        if (cap == NULL ||
-            virNodeDeviceObjHasCap(driver->devs.objs[i], cap)) {
-            if (VIR_STRDUP(names[ndevs++], driver->devs.objs[i]->def->name) < 0) {
-                virNodeDeviceObjUnlock(driver->devs.objs[i]);
-                goto failure;
-            }
-        }
-        virNodeDeviceObjUnlock(driver->devs.objs[i]);
-    }
+    nnames = virNodeDeviceObjGetNames(&driver->devs, conn, NULL,
+                                     cap, names, maxnames);
     testDriverUnlock(driver);
 
-    return ndevs;
-
- failure:
-    testDriverUnlock(driver);
-    --ndevs;
-    while (--ndevs >= 0)
-        VIR_FREE(names[ndevs]);
-    return -1;
+    return nnames;
 }
+
 
 static virNodeDevicePtr
 testNodeDeviceLookupByName(virConnectPtr conn, const char *name)

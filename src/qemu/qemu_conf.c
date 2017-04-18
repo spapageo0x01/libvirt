@@ -407,6 +407,7 @@ static void virQEMUDriverConfigDispose(void *obj)
 
     VIR_FREE(cfg->saveImageFormat);
     VIR_FREE(cfg->dumpImageFormat);
+    VIR_FREE(cfg->snapshotImageFormat);
     VIR_FREE(cfg->autoDumpPath);
 
     virStringListFree(cfg->securityDriverNames);
@@ -876,6 +877,7 @@ int virQEMUDriverConfigLoadFile(virQEMUDriverConfigPtr cfg,
     ret = 0;
 
  cleanup:
+    virStringListFree(namespaces);
     virStringListFree(controllers);
     virStringListFree(hugetlbfs);
     virStringListFree(nvram);

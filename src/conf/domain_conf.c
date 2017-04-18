@@ -1723,9 +1723,12 @@ void
 virDomainDiskEmptySource(virDomainDiskDefPtr def)
 {
     virStorageSourcePtr src = def->src;
+    bool readonly = src->readonly;
 
     virStorageSourceClear(src);
     src->type = VIR_STORAGE_TYPE_FILE;
+    /* readonly property is necessary for CDROMs and thus can't be cleared */
+    src->readonly = readonly;
 }
 
 
@@ -13086,7 +13089,6 @@ virSysinfoBaseBoardParseXML(xmlXPathContextPtr ctxt,
     *baseBoard = boards;
     *nbaseBoard = nboards;
     boards = NULL;
-    nboards = 0;
     ret = 0;
  cleanup:
     VIR_FREE(boards);
@@ -23987,6 +23989,15 @@ virDomainDefIothreadShouldFormat(virDomainDefPtr def)
 }
 
 
+static void
+virDomainIOMMUDefFormat(virBufferPtr buf,
+                        const virDomainIOMMUDef *iommu)
+{
+    virBufferAsprintf(buf, "<iommu model='%s'/>\n",
+                      virDomainIOMMUModelTypeToString(iommu->model));
+}
+
+
 /* This internal version appends to an existing buffer
  * (possibly with auto-indent), rather than flattening
  * to string.
@@ -24733,10 +24744,8 @@ virDomainDefFormatInternal(virDomainDefPtr def,
             goto error;
     }
 
-    if (def->iommu) {
-        virBufferAsprintf(buf, "<iommu model='%s'/>\n",
-                          virDomainIOMMUModelTypeToString(def->iommu->model));
-    }
+    if (def->iommu)
+        virDomainIOMMUDefFormat(buf, def->iommu);
 
     virBufferAdjustIndent(buf, -2);
     virBufferAddLit(buf, "</devices>\n");

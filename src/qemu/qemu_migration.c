@@ -415,7 +415,7 @@ qemuMigrateDisk(virDomainDiskDef const *disk,
     /* Default is to migrate only non-shared non-readonly disks
      * with source */
     return !disk->src->shared && !disk->src->readonly &&
-           virDomainDiskGetSource(disk);
+           !virStorageSourceIsEmpty(disk->src);
 }
 
 
@@ -515,9 +515,10 @@ qemuMigrationStartNBDServer(virQEMUDriverPtr driver,
         if (!qemuMigrateDisk(disk, nmigrate_disks, migrate_disks))
             continue;
 
-        if (disk->src->readonly) {
+        if (disk->src->readonly || virStorageSourceIsEmpty(disk->src)) {
             virReportError(VIR_ERR_OPERATION_UNSUPPORTED,
-                           _("Cannot migrate read-only disk %s"), disk->dst);
+                           _("Cannot migrate empty or read-only disk %s"),
+                           disk->dst);
             goto cleanup;
         }
 
@@ -1126,9 +1127,14 @@ qemuMigrationIsAllowed(virQEMUDriverPtr driver,
 static bool
 qemuMigrationIsSafe(virDomainDefPtr def,
                     size_t nmigrate_disks,
-                    const char **migrate_disks)
+                    const char **migrate_disks,
+                    unsigned int flags)
+
 {
+    bool storagemigration = flags & (VIR_MIGRATE_NON_SHARED_DISK |
+                                     VIR_MIGRATE_NON_SHARED_INC);
     size_t i;
+    int rc;
 
     for (i = 0; i < def->ndisks; i++) {
         virDomainDiskDefPtr disk = def->disks[i];
@@ -1136,29 +1142,35 @@ qemuMigrationIsSafe(virDomainDefPtr def,
 
         /* Our code elsewhere guarantees shared disks are either readonly (in
          * which case cache mode doesn't matter) or used with cache=none */
-        if (qemuMigrateDisk(disk, nmigrate_disks, migrate_disks) &&
-            disk->cachemode != VIR_DOMAIN_DISK_CACHE_DISABLE) {
-            int rc;
+        if (virStorageSourceIsEmpty(disk->src) ||
+            disk->src->readonly ||
+            disk->src->shared ||
+            disk->cachemode == VIR_DOMAIN_DISK_CACHE_DISABLE)
+            continue;
 
-            if (virDomainDiskGetType(disk) == VIR_STORAGE_TYPE_FILE) {
-                if ((rc = virFileIsSharedFS(src)) < 0)
-                    return false;
-                else if (rc == 0)
-                    continue;
-                if ((rc = virStorageFileIsClusterFS(src)) < 0)
-                    return false;
-                else if (rc == 1)
-                    continue;
-            } else if (disk->src->type == VIR_STORAGE_TYPE_NETWORK &&
-                       disk->src->protocol == VIR_STORAGE_NET_PROTOCOL_RBD) {
+        /* disks which are migrated by qemu are safe too */
+        if (storagemigration &&
+            qemuMigrateDisk(disk, nmigrate_disks, migrate_disks))
+            continue;
+
+        if (virDomainDiskGetType(disk) == VIR_STORAGE_TYPE_FILE) {
+            if ((rc = virFileIsSharedFS(src)) < 0)
+                return false;
+            else if (rc == 0)
                 continue;
-            }
-
-            virReportError(VIR_ERR_MIGRATE_UNSAFE, "%s",
-                           _("Migration may lead to data corruption if disks"
-                             " use cache != none"));
-            return false;
+            if ((rc = virStorageFileIsClusterFS(src)) < 0)
+                return false;
+            else if (rc == 1)
+                continue;
+        } else if (disk->src->type == VIR_STORAGE_TYPE_NETWORK &&
+                   disk->src->protocol == VIR_STORAGE_NET_PROTOCOL_RBD) {
+            continue;
         }
+
+        virReportError(VIR_ERR_MIGRATE_UNSAFE, "%s",
+                       _("Migration may lead to data corruption if disks"
+                         " use cache != none"));
+        return false;
     }
 
     return true;
@@ -1915,7 +1927,7 @@ qemuMigrationBeginPhase(virQEMUDriverPtr driver,
         goto cleanup;
 
     if (!(flags & VIR_MIGRATE_UNSAFE) &&
-        !qemuMigrationIsSafe(vm->def, nmigrate_disks, migrate_disks))
+        !qemuMigrationIsSafe(vm->def, nmigrate_disks, migrate_disks, flags))
         goto cleanup;
 
     if (flags & VIR_MIGRATE_POSTCOPY &&
@@ -4773,7 +4785,7 @@ qemuMigrationPerformJob(virQEMUDriverPtr driver,
         goto endjob;
 
     if (!(flags & VIR_MIGRATE_UNSAFE) &&
-        !qemuMigrationIsSafe(vm->def, nmigrate_disks, migrate_disks))
+        !qemuMigrationIsSafe(vm->def, nmigrate_disks, migrate_disks, flags))
         goto endjob;
 
     qemuMigrationStoreDomainState(vm);

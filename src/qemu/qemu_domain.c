@@ -111,7 +111,8 @@ VIR_ENUM_IMPL(qemuDomainNamespace, QEMU_DOMAIN_NS_LAST,
 
 
 struct _qemuDomainLogContext {
-    int refs;
+    virObject parent;
+
     int writefd;
     int readfd; /* Only used if manager == NULL */
     off_t pos;
@@ -119,6 +120,36 @@ struct _qemuDomainLogContext {
     char *path;
     virLogManagerPtr manager;
 };
+
+static virClassPtr qemuDomainLogContextClass;
+
+static void qemuDomainLogContextDispose(void *obj);
+
+static int
+qemuDomainLogContextOnceInit(void)
+{
+    if (!(qemuDomainLogContextClass = virClassNew(virClassForObject(),
+                                                 "qemuDomainLogContext",
+                                                 sizeof(qemuDomainLogContext),
+                                                 qemuDomainLogContextDispose)))
+        return -1;
+
+    return 0;
+}
+
+VIR_ONCE_GLOBAL_INIT(qemuDomainLogContext)
+
+static void
+qemuDomainLogContextDispose(void *obj)
+{
+    qemuDomainLogContextPtr ctxt = obj;
+    VIR_DEBUG("ctxt=%p", ctxt);
+
+    virLogManagerFree(ctxt->manager);
+    VIR_FREE(ctxt->path);
+    VIR_FORCE_CLOSE(ctxt->writefd);
+    VIR_FORCE_CLOSE(ctxt->readfd);
+}
 
 const char *
 qemuDomainAsyncJobPhaseToString(qemuDomainAsyncJob job,
@@ -2334,7 +2365,7 @@ qemuDomainDefAddDefaultDevices(virDomainDefPtr def,
             addDefaultUSB = false;
             break;
         }
-        if (qemuDomainMachineIsQ35(def)) {
+        if (qemuDomainIsQ35(def)) {
             addPCIeRoot = true;
             addImplicitSATA = true;
 
@@ -2351,7 +2382,7 @@ qemuDomainDefAddDefaultDevices(virDomainDefPtr def,
                 addDefaultUSB = false;
             break;
         }
-        if (qemuDomainMachineIsI440FX(def))
+        if (qemuDomainIsI440FX(def))
             addPCIRoot = true;
         break;
 
@@ -2359,7 +2390,7 @@ qemuDomainDefAddDefaultDevices(virDomainDefPtr def,
     case VIR_ARCH_AARCH64:
         addDefaultUSB = false;
         addDefaultMemballoon = false;
-        if (qemuDomainMachineIsVirt(def))
+        if (qemuDomainIsVirt(def))
             addPCIeRoot = virQEMUCapsGet(qemuCaps, QEMU_CAPS_OBJECT_GPEX);
         break;
 
@@ -2371,7 +2402,7 @@ qemuDomainDefAddDefaultDevices(virDomainDefPtr def,
         /* For pSeries guests, the firmware provides the same
          * functionality as the pvpanic device, so automatically
          * add the definition if not already present */
-        if (qemuDomainMachineIsPSeries(def))
+        if (qemuDomainIsPSeries(def))
             addPanicDevice = true;
         break;
 
@@ -2521,7 +2552,7 @@ qemuDomainDefEnableDefaultFeatures(virDomainDefPtr def,
      * was not included in the domain XML, we need to choose a suitable
      * GIC version ourselves */
     if (def->features[VIR_DOMAIN_FEATURE_GIC] == VIR_TRISTATE_SWITCH_ABSENT &&
-        qemuDomainMachineIsVirt(def)) {
+        qemuDomainIsVirt(def)) {
 
         VIR_DEBUG("Looking for usable GIC version in domain capabilities");
         for (version = VIR_GIC_VERSION_LAST - 1;
@@ -2909,7 +2940,7 @@ qemuDomainDefValidate(const virDomainDef *def,
         /* These are the QEMU implementation limitations. But we
          * have to live with them for now. */
 
-        if (!qemuDomainMachineIsQ35(def)) {
+        if (!qemuDomainIsQ35(def)) {
             virReportError(VIR_ERR_CONFIG_UNSUPPORTED, "%s",
                            _("Secure boot is supported with q35 machine types only"));
             goto cleanup;
@@ -3008,7 +3039,7 @@ qemuDomainDefaultNetModel(const virDomainDef *def,
         if (STREQ(def->os.machine, "versatilepb"))
             return "smc91c111";
 
-        if (qemuDomainMachineIsVirt(def))
+        if (qemuDomainIsVirt(def))
             return "virtio";
 
         /* Incomplete. vexpress (and a few others) use this, but not all
@@ -3167,14 +3198,14 @@ qemuDomainControllerDefPostParse(virDomainControllerDefPtr cont,
 
     case VIR_DOMAIN_CONTROLLER_TYPE_PCI:
         if (cont->model == VIR_DOMAIN_CONTROLLER_MODEL_PCI_EXPANDER_BUS &&
-            !qemuDomainMachineIsI440FX(def)) {
+            !qemuDomainIsI440FX(def)) {
             virReportError(VIR_ERR_CONFIG_UNSUPPORTED, "%s",
                            _("pci-expander-bus controllers are only supported "
                              "on 440fx-based machinetypes"));
             return -1;
         }
         if (cont->model == VIR_DOMAIN_CONTROLLER_MODEL_PCIE_EXPANDER_BUS &&
-            !qemuDomainMachineIsQ35(def)) {
+            !qemuDomainIsQ35(def)) {
             virReportError(VIR_ERR_CONFIG_UNSUPPORTED, "%s",
                            _("pcie-expander-bus controllers are only supported "
                              "on q35-based machinetypes"));
@@ -3329,7 +3360,7 @@ qemuDomainDeviceDefPostParse(virDomainDeviceDefPtr dev,
 
     if (dev->type == VIR_DOMAIN_DEVICE_PANIC &&
         dev->data.panic->model == VIR_DOMAIN_PANIC_MODEL_DEFAULT) {
-        if (qemuDomainMachineIsPSeries(def))
+        if (qemuDomainIsPSeries(def))
             dev->data.panic->model = VIR_DOMAIN_PANIC_MODEL_PSERIES;
         else if (ARCH_IS_S390(def->os.arch))
             dev->data.panic->model = VIR_DOMAIN_PANIC_MODEL_S390;
@@ -4016,7 +4047,7 @@ qemuDomainDefFormatBuf(virQEMUDriverPtr driver,
          * because other architectures and machine types were introduced
          * when libvirt already supported <controller type='usb'/>.
          */
-        if (ARCH_IS_X86(def->os.arch) && qemuDomainMachineIsI440FX(def) &&
+        if (ARCH_IS_X86(def->os.arch) && qemuDomainIsI440FX(def) &&
             usb && usb->idx == 0 &&
             (usb->model == -1 ||
              usb->model == VIR_DOMAIN_CONTROLLER_MODEL_USB_PIIX3_UHCI)) {
@@ -4195,7 +4226,7 @@ void qemuDomainObjTaint(virQEMUDriverPtr driver,
  cleanup:
     VIR_FREE(timestamp);
     if (closeLog)
-        qemuDomainLogContextFree(logCtxt);
+        virObjectUnref(logCtxt);
     if (orig_err) {
         virSetError(orig_err);
         virFreeError(orig_err);
@@ -4307,13 +4338,15 @@ qemuDomainLogContextPtr qemuDomainLogContextNew(virQEMUDriverPtr driver,
     virQEMUDriverConfigPtr cfg = virQEMUDriverGetConfig(driver);
     qemuDomainLogContextPtr ctxt = NULL;
 
-    if (VIR_ALLOC(ctxt) < 0)
-        goto error;
+    if (qemuDomainLogContextInitialize() < 0)
+        goto cleanup;
+
+    if (!(ctxt = virObjectNew(qemuDomainLogContextClass)))
+        goto cleanup;
 
     VIR_DEBUG("Context new %p stdioLogD=%d", ctxt, cfg->stdioLogD);
     ctxt->writefd = -1;
     ctxt->readfd = -1;
-    virAtomicIntSet(&ctxt->refs, 1);
 
     if (virAsprintf(&ctxt->path, "%s/%s.log", cfg->logDir, vm->def->name) < 0)
         goto error;
@@ -4381,7 +4414,7 @@ qemuDomainLogContextPtr qemuDomainLogContextNew(virQEMUDriverPtr driver,
     return ctxt;
 
  error:
-    qemuDomainLogContextFree(ctxt);
+    virObjectUnref(ctxt);
     ctxt = NULL;
     goto cleanup;
 }
@@ -4550,36 +4583,9 @@ void qemuDomainLogContextMarkPosition(qemuDomainLogContextPtr ctxt)
 }
 
 
-void qemuDomainLogContextRef(qemuDomainLogContextPtr ctxt)
-{
-    VIR_DEBUG("Context ref %p", ctxt);
-    virAtomicIntInc(&ctxt->refs);
-}
-
-
 virLogManagerPtr qemuDomainLogContextGetManager(qemuDomainLogContextPtr ctxt)
 {
     return ctxt->manager;
-}
-
-
-void qemuDomainLogContextFree(qemuDomainLogContextPtr ctxt)
-{
-    bool lastRef;
-
-    if (!ctxt)
-        return;
-
-    lastRef = virAtomicIntDecAndTest(&ctxt->refs);
-    VIR_DEBUG("Context free %p lastref=%d", ctxt, lastRef);
-    if (!lastRef)
-        return;
-
-    virLogManagerFree(ctxt->manager);
-    VIR_FREE(ctxt->path);
-    VIR_FORCE_CLOSE(ctxt->writefd);
-    VIR_FORCE_CLOSE(ctxt->readfd);
-    VIR_FREE(ctxt);
 }
 
 
@@ -5849,26 +5855,40 @@ qemuFindAgentConfig(virDomainDefPtr def)
 
 
 bool
-qemuDomainMachineIsQ35(const virDomainDef *def)
+qemuDomainIsQ35(const virDomainDef *def)
 {
-    return (STRPREFIX(def->os.machine, "pc-q35") ||
-            STREQ(def->os.machine, "q35"));
+    return qemuDomainMachineIsQ35(def->os.machine);
 }
 
 
 bool
-qemuDomainMachineIsI440FX(const virDomainDef *def)
+qemuDomainMachineIsQ35(const char *machine)
 {
-    return (STREQ(def->os.machine, "pc") ||
-            STRPREFIX(def->os.machine, "pc-0.") ||
-            STRPREFIX(def->os.machine, "pc-1.") ||
-            STRPREFIX(def->os.machine, "pc-i440") ||
-            STRPREFIX(def->os.machine, "rhel"));
+    return (STRPREFIX(machine, "pc-q35") ||
+            STREQ(machine, "q35"));
 }
 
 
 bool
-qemuDomainMachineHasPCIRoot(const virDomainDef *def)
+qemuDomainIsI440FX(const virDomainDef *def)
+{
+    return qemuDomainMachineIsI440FX(def->os.machine);
+}
+
+
+bool
+qemuDomainMachineIsI440FX(const char *machine)
+{
+    return (STREQ(machine, "pc") ||
+            STRPREFIX(machine, "pc-0.") ||
+            STRPREFIX(machine, "pc-1.") ||
+            STRPREFIX(machine, "pc-i440") ||
+            STRPREFIX(machine, "rhel"));
+}
+
+
+bool
+qemuDomainHasPCIRoot(const virDomainDef *def)
 {
     int root = virDomainControllerFind(def, VIR_DOMAIN_CONTROLLER_TYPE_PCI, 0);
 
@@ -5883,7 +5903,7 @@ qemuDomainMachineHasPCIRoot(const virDomainDef *def)
 
 
 bool
-qemuDomainMachineHasPCIeRoot(const virDomainDef *def)
+qemuDomainHasPCIeRoot(const virDomainDef *def)
 {
     int root = virDomainControllerFind(def, VIR_DOMAIN_CONTROLLER_TYPE_PCI, 0);
 
@@ -5898,9 +5918,16 @@ qemuDomainMachineHasPCIeRoot(const virDomainDef *def)
 
 
 bool
-qemuDomainMachineNeedsFDC(const virDomainDef *def)
+qemuDomainNeedsFDC(const virDomainDef *def)
 {
-    char *p = STRSKIP(def->os.machine, "pc-q35-");
+    return qemuDomainMachineNeedsFDC(def->os.machine);
+}
+
+
+bool
+qemuDomainMachineNeedsFDC(const char *machine)
+{
+    const char *p = STRSKIP(machine, "pc-q35-");
 
     if (p) {
         if (STRPREFIX(p, "1.") ||
@@ -5916,21 +5943,36 @@ qemuDomainMachineNeedsFDC(const virDomainDef *def)
 
 
 bool
-qemuDomainMachineIsS390CCW(const virDomainDef *def)
+qemuDomainIsS390CCW(const virDomainDef *def)
 {
-    return STRPREFIX(def->os.machine, "s390-ccw");
+    return qemuDomainMachineIsS390CCW(def->os.machine);
 }
 
 
 bool
-qemuDomainMachineIsVirt(const virDomainDef *def)
+qemuDomainMachineIsS390CCW(const char *machine)
 {
-    if (def->os.arch != VIR_ARCH_ARMV7L &&
-        def->os.arch != VIR_ARCH_AARCH64)
+    return STRPREFIX(machine, "s390-ccw");
+}
+
+
+bool
+qemuDomainIsVirt(const virDomainDef *def)
+{
+    return qemuDomainMachineIsVirt(def->os.machine, def->os.arch);
+}
+
+
+bool
+qemuDomainMachineIsVirt(const char *machine,
+                        const virArch arch)
+{
+    if (arch != VIR_ARCH_ARMV7L &&
+        arch != VIR_ARCH_AARCH64)
         return false;
 
-    if (STRNEQ(def->os.machine, "virt") &&
-        !STRPREFIX(def->os.machine, "virt-"))
+    if (STRNEQ(machine, "virt") &&
+        !STRPREFIX(machine, "virt-"))
         return false;
 
     return true;
@@ -5938,13 +5980,21 @@ qemuDomainMachineIsVirt(const virDomainDef *def)
 
 
 bool
-qemuDomainMachineIsPSeries(const virDomainDef *def)
+qemuDomainIsPSeries(const virDomainDef *def)
 {
-    if (!ARCH_IS_PPC64(def->os.arch))
+    return qemuDomainMachineIsPSeries(def->os.machine, def->os.arch);
+}
+
+
+bool
+qemuDomainMachineIsPSeries(const char *machine,
+                           const virArch arch)
+{
+    if (!ARCH_IS_PPC64(arch))
         return false;
 
-    if (STRNEQ(def->os.machine, "pseries") &&
-        !STRPREFIX(def->os.machine, "pseries-"))
+    if (STRNEQ(machine, "pseries") &&
+        !STRPREFIX(machine, "pseries-"))
         return false;
 
     return true;
@@ -6146,12 +6196,19 @@ qemuDomainDefValidateMemoryHotplug(const virDomainDef *def,
 
 
 bool
-qemuDomainMachineHasBuiltinIDE(const virDomainDef *def)
+qemuDomainHasBuiltinIDE(const virDomainDef *def)
 {
-    return qemuDomainMachineIsI440FX(def) ||
-        STREQ(def->os.machine, "malta") ||
-        STREQ(def->os.machine, "sun4u") ||
-        STREQ(def->os.machine, "g3beige");
+    return qemuDomainMachineHasBuiltinIDE(def->os.machine);
+}
+
+
+bool
+qemuDomainMachineHasBuiltinIDE(const char *machine)
+{
+    return qemuDomainMachineIsI440FX(machine) ||
+        STREQ(machine, "malta") ||
+        STREQ(machine, "sun4u") ||
+        STREQ(machine, "g3beige");
 }
 
 

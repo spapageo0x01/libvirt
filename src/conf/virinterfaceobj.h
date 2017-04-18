@@ -81,4 +81,14 @@ typedef bool
 (*virInterfaceObjListFilter)(virConnectPtr conn,
                              virInterfaceDefPtr def);
 
+int
+virInterfaceObjNumOfInterfaces(virInterfaceObjListPtr interfaces,
+                               bool wantActive);
+
+int
+virInterfaceObjGetNames(virInterfaceObjListPtr interfaces,
+                        bool wantActive,
+                        char **const names,
+                        int maxnames);
+
 #endif /* __VIRINTERFACEOBJ_H__ */

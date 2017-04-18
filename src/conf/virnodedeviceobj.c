@@ -33,7 +33,7 @@
 VIR_LOG_INIT("conf.virnodedeviceobj");
 
 
-int
+static int
 virNodeDeviceObjHasCap(const virNodeDeviceObj *dev,
                        const char *cap)
 {
@@ -474,6 +474,62 @@ virNodeDeviceCapMatch(virNodeDeviceObjPtr devobj,
 }
 
 
+int
+virNodeDeviceObjNumOfDevices(virNodeDeviceObjListPtr devs,
+                             virConnectPtr conn,
+                             const char *cap,
+                             virNodeDeviceObjListFilter aclfilter)
+{
+    size_t i;
+    int ndevs = 0;
+
+    for (i = 0; i < devs->count; i++) {
+        virNodeDeviceObjPtr obj = devs->objs[i];
+        virNodeDeviceObjLock(obj);
+        if ((!aclfilter || aclfilter(conn, obj->def)) &&
+            (!cap || virNodeDeviceObjHasCap(obj, cap)))
+            ++ndevs;
+        virNodeDeviceObjUnlock(obj);
+    }
+
+    return ndevs;
+}
+
+
+int
+virNodeDeviceObjGetNames(virNodeDeviceObjListPtr devs,
+                         virConnectPtr conn,
+                         virNodeDeviceObjListFilter aclfilter,
+                         const char *cap,
+                         char **const names,
+                         int maxnames)
+{
+    int nnames = 0;
+    size_t i;
+
+    for (i = 0; i < devs->count && nnames < maxnames; i++) {
+        virNodeDeviceObjPtr obj = devs->objs[i];
+        virNodeDeviceObjLock(obj);
+        if ((!aclfilter || aclfilter(conn, obj->def)) &&
+            (!cap || virNodeDeviceObjHasCap(obj, cap))) {
+            if (VIR_STRDUP(names[nnames], obj->def->name) < 0) {
+                virNodeDeviceObjUnlock(obj);
+                goto failure;
+            }
+            nnames++;
+        }
+        virNodeDeviceObjUnlock(obj);
+    }
+
+    return nnames;
+
+ failure:
+    while (--nnames >= 0)
+        VIR_FREE(names[nnames]);
+    return -1;
+}
+
+
 #define MATCH(FLAG) ((flags & (VIR_CONNECT_LIST_NODE_DEVICES_CAP_ ## FLAG)) && \
                      virNodeDeviceCapMatch(devobj, VIR_NODE_DEV_CAP_ ## FLAG))
 static bool
@@ -505,7 +561,7 @@ virNodeDeviceMatch(virNodeDeviceObjPtr devobj,
 
 int
 virNodeDeviceObjListExport(virConnectPtr conn,
-                           virNodeDeviceObjList devobjs,
+                           virNodeDeviceObjListPtr devobjs,
                            virNodeDevicePtr **devices,
                            virNodeDeviceObjListFilter filter,
                            unsigned int flags)
@@ -516,11 +572,11 @@ virNodeDeviceObjListExport(virConnectPtr conn,
     int ret = -1;
     size_t i;
 
-    if (devices && VIR_ALLOC_N(tmp_devices, devobjs.count + 1) < 0)
+    if (devices && VIR_ALLOC_N(tmp_devices, devobjs->count + 1) < 0)
         goto cleanup;
 
-    for (i = 0; i < devobjs.count; i++) {
-        virNodeDeviceObjPtr devobj = devobjs.objs[i];
+    for (i = 0; i < devobjs->count; i++) {
+        virNodeDeviceObjPtr devobj = devobjs->objs[i];
         virNodeDeviceObjLock(devobj);
         if ((!filter || filter(conn, devobj->def)) &&
             virNodeDeviceMatch(devobj, flags)) {

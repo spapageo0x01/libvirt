@@ -4902,3 +4902,63 @@ int prlsdkMigrate(virDomainObjPtr dom, virURIPtr uri,
  cleanup:
     return ret;
 }
+
+int prlsdkSetCpuCount(virDomainObjPtr dom, unsigned int count)
+{
+    vzDomObjPtr privdom = dom->privateData;
+    PRL_HANDLE job;
+    PRL_RESULT pret;
+
+    job = PrlVm_BeginEdit(privdom->sdkdom);
+    if (PRL_FAILED(waitDomainJob(job, dom)))
+        goto error;
+
+    pret = PrlVmCfg_SetCpuCount(privdom->sdkdom, count);
+    prlsdkCheckRetGoto(pret, error);
+
+    job = PrlVm_CommitEx(privdom->sdkdom, 0);
+    if (PRL_FAILED(waitDomainJob(job, dom)))
+        goto error;
+
+    return 0;
+
+ error:
+    return -1;
+}
+
+int prlsdkResizeImage(virDomainObjPtr dom, virDomainDiskDefPtr disk,
+                      unsigned long long newsize)
+{
+    int ret = -1;
+    PRL_RESULT pret;
+    vzDomObjPtr privdom = dom->privateData;
+    PRL_UINT32 emulatedType;
+    PRL_HANDLE job = PRL_INVALID_HANDLE;
+    PRL_HANDLE prldisk = PRL_INVALID_HANDLE;
+
+    prldisk = prlsdkGetDisk(privdom->sdkdom, disk);
+    if (prldisk == PRL_INVALID_HANDLE)
+        goto cleanup;
+
+    pret = PrlVmDev_GetEmulatedType(prldisk, &emulatedType);
+    prlsdkCheckRetGoto(pret, cleanup);
+
+    if (emulatedType != PDT_USE_IMAGE_FILE &&
+        emulatedType != PDT_USE_FILE_SYSTEM) {
+        virReportError(VIR_ERR_INVALID_ARG, "%s",
+                       _("Only disk image supported for resize"));
+        goto cleanup;
+    }
+
+    job = PrlVmDev_ResizeImage(prldisk, newsize,
+                               PRIF_RESIZE_LAST_PARTITION);
+    if (PRL_FAILED(waitJob(job)))
+        goto cleanup;
+
+    ret = 0;
+
+ cleanup:
+
+    PrlHandle_Free(prldisk);
+    return ret;
+}

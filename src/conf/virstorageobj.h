@@ -108,6 +108,32 @@ virStorageVolDefFindByName(virStoragePoolObjPtr pool,
 void
 virStoragePoolObjClearVols(virStoragePoolObjPtr pool);
 
+typedef bool
+(*virStoragePoolVolumeACLFilter)(virConnectPtr conn,
+                                 virStoragePoolDefPtr pool,
+                                 virStorageVolDefPtr def);
+
+int
+virStoragePoolObjNumOfVolumes(virStorageVolDefListPtr volumes,
+                              virConnectPtr conn,
+                              virStoragePoolDefPtr pooldef,
+                              virStoragePoolVolumeACLFilter aclfilter);
+
+int
+virStoragePoolObjVolumeGetNames(virStorageVolDefListPtr volumes,
+                                virConnectPtr conn,
+                                virStoragePoolDefPtr pooldef,
+                                virStoragePoolVolumeACLFilter aclfilter,
+                                char **const names,
+                                int maxnames);
+
+int
+virStoragePoolObjVolumeListExport(virConnectPtr conn,
+                                  virStorageVolDefListPtr volumes,
+                                  virStoragePoolDefPtr pooldef,
+                                  virStorageVolPtr **vols,
+                                  virStoragePoolVolumeACLFilter aclfilter);
+
 virStoragePoolObjPtr
 virStoragePoolObjAssignDef(virStoragePoolObjListPtr pools,
                            virStoragePoolDefPtr def);
@@ -119,6 +145,23 @@ virStoragePoolObjSaveDef(virStorageDriverStatePtr driver,
 
 int
 virStoragePoolObjDeleteDef(virStoragePoolObjPtr pool);
+
+typedef bool (*virStoragePoolObjListACLFilter)(virConnectPtr conn,
+                                               virStoragePoolDefPtr def);
+
+int
+virStoragePoolObjNumOfStoragePools(virStoragePoolObjListPtr pools,
+                                   virConnectPtr conn,
+                                   bool wantActive,
+                                   virStoragePoolObjListACLFilter aclfilter);
+
+int
+virStoragePoolObjGetNames(virStoragePoolObjListPtr pools,
+                          virConnectPtr conn,
+                          bool wantActive,
+                          virStoragePoolObjListACLFilter aclfilter,
+                          char **const names,
+                          int maxnames);
 
 void
 virStoragePoolObjFree(virStoragePoolObjPtr pool);
@@ -148,7 +191,7 @@ virStoragePoolObjUnlock(virStoragePoolObjPtr obj);
 
 int
 virStoragePoolObjListExport(virConnectPtr conn,
-                            virStoragePoolObjList poolobjs,
+                            virStoragePoolObjListPtr poolobjs,
                             virStoragePoolPtr **pools,
                             virStoragePoolObjListFilter filter,
                             unsigned int flags);
