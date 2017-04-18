@@ -69,6 +69,9 @@
 #if WITH_STORAGE_VSTORAGE
 # include "storage_backend_vstorage.h"
 #endif
+#if WITH_STORAGE_VICINITY
+# include "storage_backend_vicinity.h"
+#endif
 
 #define VIR_FROM_THIS VIR_FROM_STORAGE
 
@@ -160,6 +163,9 @@ virStorageBackendDriversRegister(bool allbackends ATTRIBUTE_UNUSED)
 #endif
 #if WITH_STORAGE_VSTORAGE
     VIR_STORAGE_BACKEND_REGISTER(virStorageBackendVstorageRegister, "vstorage");
+#endif
+#if WITH_STORAGE_VICINITY
+    VIR_STORAGE_BACKEND_REGISTER(virStorageBackendVicinityRegister, "vicinity");
 #endif
 
     return 0;

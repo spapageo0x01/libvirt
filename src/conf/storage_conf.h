@@ -96,6 +96,7 @@ typedef enum {
     VIR_STORAGE_POOL_GLUSTER,  /* Gluster device */
     VIR_STORAGE_POOL_ZFS,      /* ZFS */
     VIR_STORAGE_POOL_VSTORAGE, /* Virtuozzo Storage */
+    VIR_STORAGE_POOL_VICINITY, /* ioFABRIC Vicinity volume */
 
     VIR_STORAGE_POOL_LAST,
 } virStoragePoolType;
@@ -435,7 +436,8 @@ VIR_ENUM_DECL(virStoragePartedFs)
                  VIR_CONNECT_LIST_STORAGE_POOLS_SHEEPDOG | \
                  VIR_CONNECT_LIST_STORAGE_POOLS_GLUSTER  | \
                  VIR_CONNECT_LIST_STORAGE_POOLS_ZFS      | \
-                 VIR_CONNECT_LIST_STORAGE_POOLS_VSTORAGE)
+                 VIR_CONNECT_LIST_STORAGE_POOLS_VSTORAGE | \
+		 VIR_CONNECT_LIST_STORAGE_POOLS_VICINITY)
 
 # define VIR_CONNECT_LIST_STORAGE_POOLS_FILTERS_ALL                  \
                 (VIR_CONNECT_LIST_STORAGE_POOLS_FILTERS_ACTIVE     | \

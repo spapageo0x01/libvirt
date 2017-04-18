@@ -64,7 +64,7 @@ VIR_ENUM_IMPL(virStoragePool,
               "logical", "disk", "iscsi",
               "scsi", "mpath", "rbd",
               "sheepdog", "gluster", "zfs",
-              "vstorage")
+              "vstorage", "vicinity")
 
 VIR_ENUM_IMPL(virStoragePoolFormatFileSystem,
               VIR_STORAGE_POOL_FS_LAST,

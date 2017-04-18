@@ -843,6 +843,7 @@ virStoragePoolObjSourceFindDuplicate(virConnectPtr conn,
                 matchpool = pool;
             break;
         case VIR_STORAGE_POOL_RBD:
+	case VIR_STORAGE_POOL_VICINITY:
         case VIR_STORAGE_POOL_LAST:
             break;
         }
