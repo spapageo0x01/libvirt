@@ -276,6 +276,13 @@ static virStoragePoolTypeInfo poolTypeInfo[] = {
          .defaultFormat = VIR_STORAGE_FILE_RAW,
      },
     },
+    {.poolType = VIR_STORAGE_POOL_VICINITY,
+     .poolOptions = {
+         .flags = (VIR_STORAGE_POOL_SOURCE_NAME |
+                   VIR_STORAGE_POOL_SOURCE_DEVICE),
+         .defaultFormat = VIR_STORAGE_FILE_RAW,
+     },
+    },
     {.poolType = VIR_STORAGE_POOL_VSTORAGE,
      .poolOptions = {
         .flags = VIR_STORAGE_POOL_SOURCE_NAME,
