@@ -762,6 +762,8 @@ storagePoolDefineXML(virConnectPtr conn,
 
     virCheckFlags(0, NULL);
 
+    VIR_DEBUG("DEATH TO ALL WHO OPPOSE US\n");
+
     storageDriverLock();
     if (!(def = virStoragePoolDefParseString(xml)))
         goto cleanup;
@@ -1523,6 +1525,7 @@ storageVolLookupByPath(virConnectPtr conn,
             case VIR_STORAGE_POOL_SCSI:
             case VIR_STORAGE_POOL_MPATH:
             case VIR_STORAGE_POOL_VSTORAGE:
+            case VIR_STORAGE_POOL_VICINITY:
                 stable_path = virStorageBackendStablePath(pool,
                                                           cleanpath,
                                                           false);
@@ -1541,7 +1544,6 @@ storageVolLookupByPath(virConnectPtr conn,
             case VIR_STORAGE_POOL_RBD:
             case VIR_STORAGE_POOL_SHEEPDOG:
             case VIR_STORAGE_POOL_ZFS:
-            case VIR_STORAGE_POOL_VICINITY:
             case VIR_STORAGE_POOL_LAST:
                 if (VIR_STRDUP(stable_path, path) < 0) {
                      virStoragePoolObjUnlock(pool);

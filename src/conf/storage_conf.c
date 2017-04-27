@@ -280,6 +280,7 @@ static virStoragePoolTypeInfo poolTypeInfo[] = {
      .poolOptions = {
          .flags = (VIR_STORAGE_POOL_SOURCE_NAME |
                    VIR_STORAGE_POOL_SOURCE_DEVICE),
+//         .defaultFormat = VIR_STORAGE_POOL_LOGICAL_LVM2,
          .defaultFormat = VIR_STORAGE_FILE_RAW,
      },
     },
@@ -787,12 +788,14 @@ virStoragePoolDefParseXML(xmlXPathContextPtr ctxt)
     /* When we are working with a virtual disk we can skip the target
      * path and permissions */
     if (!(options->flags & VIR_STORAGE_POOL_SOURCE_NETWORK)) {
-        if (ret->type == VIR_STORAGE_POOL_LOGICAL) {
+        if (ret->type == VIR_STORAGE_POOL_LOGICAL || ret->type == VIR_STORAGE_POOL_VICINITY) {
             if (virAsprintf(&target_path, "/dev/%s", ret->source.name) < 0)
                 goto error;
         } else if (ret->type == VIR_STORAGE_POOL_ZFS) {
             if (virAsprintf(&target_path, "/dev/zvol/%s", ret->source.name) < 0)
                 goto error;
+	    //} else if (ret->type == VIR_STORAGE_POOL_VICINITY) {
+		  // printf("virStoragePoolDefParseXML - vicinity clause\n");
         } else {
             target_path = virXPathString("string(./target/path)", ctxt);
             if (!target_path) {

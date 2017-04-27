@@ -714,6 +714,7 @@ Requires: libvirt-daemon-driver-storage-logical = %{version}-%{release}
 Requires: libvirt-daemon-driver-storage-scsi = %{version}-%{release}
 Requires: libvirt-daemon-driver-storage-iscsi = %{version}-%{release}
 Requires: libvirt-daemon-driver-storage-mpath = %{version}-%{release}
+Requires: libvirt-daemon-driver-storage-vicinity = %{version}-%{release}
 %if %{with_storage_gluster}
 Requires: libvirt-daemon-driver-storage-gluster = %{version}-%{release}
 %endif
@@ -1829,6 +1830,9 @@ exit 0
 %files daemon-driver-storage-sheepdog
 %{_libdir}/%{name}/storage-backend/libvirt_storage_backend_sheepdog.so
 %endif
+
+%files deamon-driver-storage-vicinity
+%{_libdir}/%{name}/storage-backend/libvirt_storage_backend_vicinity.so
 
 %if %{with_qemu}
 %files daemon-driver-qemu

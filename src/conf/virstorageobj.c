@@ -1010,11 +1010,13 @@ virStoragePoolObjSourceFindDuplicate(virConnectPtr conn,
         case VIR_STORAGE_POOL_LOGICAL:
         case VIR_STORAGE_POOL_DISK:
         case VIR_STORAGE_POOL_ZFS:
+        case VIR_STORAGE_POOL_VICINITY:
             if (def->type == VIR_STORAGE_POOL_ISCSI ||
                 def->type == VIR_STORAGE_POOL_FS ||
                 def->type == VIR_STORAGE_POOL_LOGICAL ||
                 def->type == VIR_STORAGE_POOL_DISK ||
-                def->type == VIR_STORAGE_POOL_ZFS)
+                def->type == VIR_STORAGE_POOL_ZFS || 
+                def->type == VIR_STORAGE_POOL_VICINITY)
                 matchpool = virStoragePoolObjSourceMatchTypeDEVICE(pool, def);
             break;
 
@@ -1038,7 +1040,6 @@ virStoragePoolObjSourceFindDuplicate(virConnectPtr conn,
             break;
 
         case VIR_STORAGE_POOL_RBD:
-	case VIR_STORAGE_POOL_VICINITY:
         case VIR_STORAGE_POOL_LAST:
             break;
         }
@@ -1128,7 +1129,9 @@ virStoragePoolMatch(virStoragePoolObjPtr poolobj,
               (MATCH(VIR_CONNECT_LIST_STORAGE_POOLS_ZFS) &&
                (poolobj->def->type == VIR_STORAGE_POOL_ZFS))     ||
               (MATCH(VIR_CONNECT_LIST_STORAGE_POOLS_VSTORAGE) &&
-               (poolobj->def->type == VIR_STORAGE_POOL_VSTORAGE))))
+               (poolobj->def->type == VIR_STORAGE_POOL_VSTORAGE)) || 
+              (MATCH(VIR_CONNECT_LIST_STORAGE_POOLS_VICINITY) &&
+                (poolobj->def->type == VIR_STORAGE_POOL_VSTORAGE))))
             return false;
     }
 
