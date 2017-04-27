@@ -1027,8 +1027,7 @@ STORAGE_DRIVER_VSTORAGE_SOURCES =				\
                 storage/storage_backend_vstorage.c
 
 STORAGE_DRIVER_VICINITY_SOURCES =				\
-		storage/storage_backend_vicinity.h 		\
-		storage/storage_backend_vicinity.c
+		storage/storage_backend_vicinity.h storage/storage_backend_vicinity.c
 
 
 STORAGE_HELPER_DISK_SOURCES =					\
@@ -1741,27 +1740,6 @@ libvirt_driver_storage_impl_la_LIBADD += \
 endif ! WITH_DRIVER_MODULES
 endif WITH_STORAGE_LVM
 
-
-if WITH_STORAGE_VICINITY
-libvirt_storage_backend_vicinity_la_SOURCES = \
-	$(STORAGE_DRIVER_VICINITY_SOURCES)
-libvirt_storage_backend_vicinity_la_CFLAGS = \
-	-I$(srcdir)/conf \
-	$(AM_CFLAGS)
-
-if WITH_DRIVER_MODULES
-storagebackend_LTLIBRARIES += libvirt_storage_backend_vicinity.la
-libvirt_storage_backend_vicinity_la_LDFLAGS = \
-	-module -avoid-version $(AM_LDFLAGS)
-else ! WITH_DRIVER_MODULES
-noinst_LTLIBRARIES += libvirt_storage_backend_vicinity.la
-libvirt_driver_storage_impl_la_LIBADD += \
-	libvirt_storage_backend_vicinity.la
-endif ! WITH_DRIVER_MODULES
-endif WITH_STORAGE_VICINITY
-
-
-
 if WITH_STORAGE_ISCSI
 libvirt_storage_backend_iscsi_la_SOURCES = \
 	$(STORAGE_DRIVER_ISCSI_SOURCES)
@@ -1930,6 +1908,22 @@ libvirt_driver_storage_impl_la_LIBADD += \
 	libvirt_storage_backend_vstorage.la
 endif ! WITH_DRIVER_MODULES
 endif WITH_STORAGE_VSTORAGE
+
+if WITH_STORAGE_VICINITY
+libvirt_storage_backend_vicinity_la_SOURCES = $(STORAGE_DRIVER_VICINITY_SOURCES)
+libvirt_storage_backend_vicinity_la_CFLAGS = \
+	-I$(srcdir)/conf \
+	$(AM_CFLAGS)
+
+if WITH_DRIVER_MODULES
+storagebackend_LTLIBRARIES += libvirt_storage_backend_vicinity.la
+libvirt_storage_backend_vicinity_la_LDFLAGS = \
+	-module -avoid-version $(AM_LDFLAGS)
+else ! WITH_DRIVER_MODULES
+noinst_LTLIBRARIES += libvirt_storage_backend_vicinity.la
+libvirt_driver_storage_impl_la_LIBADD += libvirt_storage_backend_vicinity.la
+endif ! WITH_DRIVER_MODULES
+endif WITH_STORAGE_VICINITY
 
 if WITH_NODE_DEVICES
 # Needed to keep automake quiet about conditionals
