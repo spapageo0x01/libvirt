@@ -566,6 +566,7 @@ LIBVIRT_STORAGE_ARG_SHEEPDOG
 LIBVIRT_STORAGE_ARG_GLUSTER
 LIBVIRT_STORAGE_ARG_ZFS
 LIBVIRT_STORAGE_ARG_VSTORAGE
+LIBVIRT_STORAGE_ARG_VICINITY
 
 if test "$with_libvirtd" = "no"; then
   with_storage_dir=no
@@ -580,6 +581,7 @@ if test "$with_libvirtd" = "no"; then
   with_storage_gluster=no
   with_storage_zfs=no
   with_storage_vstorage=no
+  with_storage_vicinity=no
 fi
 
 dnl storage-fs does not work on MacOS X
@@ -603,7 +605,7 @@ LIBVIRT_STORAGE_CHECK_VSTORAGE
 LIBVIRT_STORAGE_CHECK_VICINITY
 
 with_storage=no
-for backend in dir fs lvm iscsi scsi mpath rbd disk; do
+for backend in dir fs lvm iscsi scsi mpath rbd disk vicinity; do
     if eval test \$with_storage_$backend = yes; then
         with_storage=yes
         break
@@ -935,6 +937,7 @@ LIBVIRT_STORAGE_RESULT_SHEEPDOG
 LIBVIRT_STORAGE_RESULT_GLUSTER
 LIBVIRT_STORAGE_RESULT_ZFS
 LIBVIRT_STORAGE_RESULT_VSTORAGE
+LIBVIRT_STORAGE_RESULT_VICINITY
 AC_MSG_NOTICE([])
 AC_MSG_NOTICE([Security Drivers])
 AC_MSG_NOTICE([])
