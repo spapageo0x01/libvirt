@@ -1,5 +1,8 @@
 #include <config.h>
 
+#include <syslog.h>
+#include <time.h>
+
 #include "storage_conf.h"
 #include "storage_backend_vicinity.h"
 #include "vircommand.h"
@@ -13,6 +16,28 @@
 VIR_LOG_INIT("storage.storage_backend_vicinity");
 
 
+#define BUFSIZE 100
+static void
+custom_print(const char *msg)
+{
+    int ret = 0;
+    char buff[BUFSIZE];
+    time_t current_time;
+    char* c_time_string;
+
+    /* Obtain current time. */
+    current_time = time(NULL);
+    /* Convert to local time format. */
+    c_time_string = ctime(&current_time);
+    c_time_string[strcspn(c_time_string, "\n")] = 0;
+
+    snprintf(buff, BUFSIZE, "echo '[%s] %s' >> /tmp/my_log", c_time_string, msg);
+
+    ret = system(buff);
+    if (ret == 0) {
+      ret = 1;
+    }
+}
 
 
 static char *
@@ -20,7 +45,7 @@ virStorageBackendVicinityFindPoolSources(virConnectPtr conn ATTRIBUTE_UNUSED,
                                         const char *srcSpec ATTRIBUTE_UNUSED,
                                         unsigned int flags ATTRIBUTE_UNUSED)
 {
-    VIR_DEBUG("virStorageBackendVicinityFindPoolSources called\n");
+    custom_print("virStorageBackendVicinityFindPoolSources called");
     return NULL;
 }
 
@@ -30,7 +55,7 @@ static int
 virStorageBackendVicinityCheckPool(virStoragePoolObjPtr pool ATTRIBUTE_UNUSED,
                                   bool *isActive ATTRIBUTE_UNUSED)
 {
-    VIR_DEBUG("virStorageBackendVicinityCheckPool called\n");
+    custom_print("virStorageBackendVicinityCheckPool called");
     return 0;
 }
 
@@ -38,7 +63,7 @@ static int
 virStorageBackendVicinityStartPool(virConnectPtr conn ATTRIBUTE_UNUSED,
                                   virStoragePoolObjPtr pool ATTRIBUTE_UNUSED)
 {
-    VIR_DEBUG("virStorageBackendVicinityStartPool called\n");
+    custom_print("virStorageBackendVicinityStartPool called");
     return 0;
 }
 
@@ -48,7 +73,7 @@ virStorageBackendVicinityBuildPool(virConnectPtr conn ATTRIBUTE_UNUSED,
                                   virStoragePoolObjPtr pool ATTRIBUTE_UNUSED,
                                   unsigned int flags ATTRIBUTE_UNUSED)
 {
-    VIR_DEBUG("virStorageBackendVicinityBuildPool called\n");
+    custom_print("virStorageBackendVicinityBuildPool called");
     return 0;
 }
 
@@ -57,7 +82,7 @@ static int
 virStorageBackendVicinityRefreshPool(virConnectPtr conn ATTRIBUTE_UNUSED,
                                     virStoragePoolObjPtr pool ATTRIBUTE_UNUSED)
 {
-    VIR_DEBUG("virStorageBackendVicinityRefreshPool called\n");
+    custom_print("virStorageBackendVicinityRefreshPool called");
 	  return 0;
 }
 
@@ -71,7 +96,7 @@ static int
 virStorageBackendVicinityStopPool(virConnectPtr conn ATTRIBUTE_UNUSED,
                                  virStoragePoolObjPtr pool ATTRIBUTE_UNUSED)
 {
-    VIR_DEBUG("virStorageBackendVicinityStopPool called\n");
+    custom_print("virStorageBackendVicinityStopPool called");
     return 0;
 }
 
@@ -80,7 +105,7 @@ virStorageBackendVicinityDeletePool(virConnectPtr conn ATTRIBUTE_UNUSED,
                                    virStoragePoolObjPtr pool ATTRIBUTE_UNUSED,
                                    unsigned int flags ATTRIBUTE_UNUSED)
 {
-    VIR_DEBUG("virStorageBackendVicinityDeletePool called\n");
+    custom_print("virStorageBackendVicinityDeletePool called");
     return 0;
 }
 
@@ -91,19 +116,36 @@ virStorageBackendVicinityDeleteVol(virConnectPtr conn ATTRIBUTE_UNUSED,
                                   virStorageVolDefPtr vol ATTRIBUTE_UNUSED,
                                   unsigned int flags ATTRIBUTE_UNUSED)
 {
-    VIR_DEBUG("virStorageBackendVicinityDeleteVol called\n");
+    custom_print("virStorageBackendVicinityDeleteVol called");
     return 0;
 }
 
+/*
+typedef struct _virStorageVolDef virStorageVolDef;
+typedef virStorageVolDef *virStorageVolDefPtr;
+struct _virStorageVolDef {
+    char *name;
+    char *key;
+    int type; // virStorageVolType
 
+    bool building;
+    unsigned int in_use;
+
+    virStorageVolSource source;
+    virStorageSource target;
+};
+*/
 static int
 virStorageBackendVicinityCreateVol(virConnectPtr conn ATTRIBUTE_UNUSED,
                                   virStoragePoolObjPtr pool ATTRIBUTE_UNUSED,
                                   virStorageVolDefPtr vol ATTRIBUTE_UNUSED)
 {
-    VIR_DEBUG("virStorageBackendVicinityCreateVol called\n");
-    return -1;
+    custom_print("virStorageBackendVicinityCreateVol called");
+    return 0;
 }
+
+
+
 
 static int
 virStorageBackendVicinityBuildVolFrom(virConnectPtr conn ATTRIBUTE_UNUSED,
@@ -112,8 +154,8 @@ virStorageBackendVicinityBuildVolFrom(virConnectPtr conn ATTRIBUTE_UNUSED,
                                      virStorageVolDefPtr inputvol ATTRIBUTE_UNUSED,
                                      unsigned int flags ATTRIBUTE_UNUSED)
 {
-    VIR_DEBUG("virStorageBackendVicinityBuildVolFrom called\n");
-    return -1;
+    custom_print("virStorageBackendVicinityBuildVolFrom called");
+    return 0;
 }
 
 static int
@@ -123,8 +165,8 @@ virStorageBackendVicinityVolWipe(virConnectPtr conn ATTRIBUTE_UNUSED,
                                 unsigned int algorithm ATTRIBUTE_UNUSED,
                                 unsigned int flags ATTRIBUTE_UNUSED)
 {
-    VIR_DEBUG("virStorageBackendVicinityVolWipe called\n");
-    return -1;
+    custom_print("virStorageBackendVicinityVolWipe called");
+    return 0;
 }
 
 virStorageBackend virStorageBackendVicinity = {
@@ -148,7 +190,6 @@ virStorageBackend virStorageBackendVicinity = {
 int
 virStorageBackendVicinityRegister(void)
 {
-    VIR_DEBUG("virStorageBackendVicinityRegister called\n");
-    //printf("virStorageBackendVicinityRegister called\n");
-    return virStorageBackendRegister(&virStorageBackendVicinity);   // Find this function call!
+  custom_print("virStorageBackendVicinityRegister called");
+  return virStorageBackendRegister(&virStorageBackendVicinity);   // Find this function call!
 }
