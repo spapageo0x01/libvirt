@@ -7,6 +7,7 @@
 #include "storage_backend_vicinity.h"
 #include "vircommand.h"
 #include "virlog.h"
+#include "viralloc.h"
 #include "virstring.h"
 #include "storage_util.h"
 
@@ -143,11 +144,38 @@ virStorageBackendVicinityCreateVol(virConnectPtr conn ATTRIBUTE_UNUSED,
     virCommandPtr cmd = NULL;
 
     custom_print("virStorageBackendVicinityCreateVol called");
-    cmd = virCommandNewArgList("/usr/bin/ls", "-la", NULL);
 
+    if (vol->target.encryption != NULL) {
+	virReportError(VIR_ERR_CONFIG_UNSUPPORTED, "%s",
+			_("storage pool does not support encrypted "
+				"volumes"));
+	return -1;
+    }
+
+    cmd = virCommandNewArgList("/usr/bin/ls", "-la", NULL);
     if (virCommandRun(cmd, NULL) < 0) {
+      custom_print("Failed to run command");
       return -1;
     }
+
+    VIR_FREE(vol->target.path);
+    if(virAsprintf(&vol->target.path, "%s/%s",
+		pool->def->source.name,
+		vol->name) == -1) {
+        custom_print("Failed to set target path");
+	return -1;
+    }
+
+    VIR_FREE(vol->key);
+    if (virAsprintf(&vol->key, "%s/%s",
+		pool->def->source.name,
+		vol->name) == -1) {
+        custom_print("Failed to set volume key");
+	return -1;
+    }
+
+    virCommandFree(cmd);
+    cmd = NULL;
 
     return 0;
 }
