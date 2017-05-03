@@ -138,8 +138,8 @@ struct _virStorageVolDef {
 */
 static int
 virStorageBackendVicinityCreateVol(virConnectPtr conn ATTRIBUTE_UNUSED,
-                                  virStoragePoolObjPtr pool ATTRIBUTE_UNUSED,
-                                  virStorageVolDefPtr vol ATTRIBUTE_UNUSED)
+                                  virStoragePoolObjPtr pool,
+                                  virStorageVolDefPtr vol)
 {
     virCommandPtr cmd = NULL;
 
@@ -152,7 +152,11 @@ virStorageBackendVicinityCreateVol(virConnectPtr conn ATTRIBUTE_UNUSED,
 	return -1;
     }
 
-    cmd = virCommandNewArgList("/usr/bin/ls", "-la", NULL);
+    cmd = virCommandNewArgList("/usr/iof/iof_glue.sh",
+				"create", 
+				pool->def->source.name,
+				vol->name, 
+				NULL);
     if (virCommandRun(cmd, NULL) < 0) {
       custom_print("Failed to run command");
       return -1;
