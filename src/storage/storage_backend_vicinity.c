@@ -140,7 +140,15 @@ virStorageBackendVicinityCreateVol(virConnectPtr conn ATTRIBUTE_UNUSED,
                                   virStoragePoolObjPtr pool ATTRIBUTE_UNUSED,
                                   virStorageVolDefPtr vol ATTRIBUTE_UNUSED)
 {
+    virCommandPtr cmd = NULL;
+
     custom_print("virStorageBackendVicinityCreateVol called");
+    cmd = virCommandNewArgList("/usr/bin/ls", "-la", NULL);
+
+    if (virCommandRun(cmd, NULL) < 0) {
+      return -1;
+    }
+
     return 0;
 }
 
