@@ -2,9 +2,30 @@
 
 #TODO: check number of arguments
 
-ARG1=$1 # create/delete
-ARG2=$2 # pool name
-ARG3=$3 # volume name
+#if [ $# -lt 3 ];then
+#	exit 1
+#fi
 
-echo "ARG1: $ARG1" > /usr/iof/temp
-echo "ARG2: $ARG2" >> /usr/iof/temp
+op=$1 # create/delete
+pool=$2 # pool name
+volume_name=$3 
+volume_size=$4
+
+
+echo "op: $op" > /usr/iof/temp
+echo "pool name: $pool" >> /usr/iof/temp
+echo "volume name: $volume_name" >> /usr/iof/temp
+echo "volume size: $volume_size" >> /usr/iof/temp
+
+if [ $op == "create" ];then
+	echo "create" >> /usr/iof/temp
+	#TODO: Call iofsh with proper arguments
+	exit 0
+fi
+
+if [ $op == "delete" ];
+	echo "delete" >> /usr/iof/temp
+	#TODO: Call iofsh with proper arguments
+	exit 0
+
+fi

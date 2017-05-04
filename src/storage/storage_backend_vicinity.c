@@ -152,11 +152,30 @@ virStorageBackendVicinityCreateVol(virConnectPtr conn ATTRIBUTE_UNUSED,
 	return -1;
     }
 
+
+    if (!vol->target.capacity) {
+        virReportError(VIR_ERR_NO_SUPPORT, "%s",
+                       _("volume capacity required for this storage pool"));
+        return -1;
+    }
+
+
+
     cmd = virCommandNewArgList("/usr/iof/iof_glue.sh",
 				"create", 
 				pool->def->source.name,
-				vol->name, 
+				vol->name,
 				NULL);
+
+
+	//conversion was from Kilobytes, fix this!
+    virCommandAddArgFormat(cmd, "%llu",
+                               VIR_DIV_UP(vol->target.capacity
+                                          ? vol->target.capacity : 1, 1024));
+        
+
+
+
     if (virCommandRun(cmd, NULL) < 0) {
       custom_print("Failed to run command");
       return -1;
@@ -219,6 +238,7 @@ virStorageBackend virStorageBackendVicinity = {
     .refreshPool = virStorageBackendVicinityRefreshPool,
     .stopPool = virStorageBackendVicinityStopPool,
     .deletePool = virStorageBackendVicinityDeletePool,
+
     .buildVol = NULL,
     .buildVolFrom = virStorageBackendVicinityBuildVolFrom,
     .createVol = virStorageBackendVicinityCreateVol,
@@ -231,5 +251,5 @@ int
 virStorageBackendVicinityRegister(void)
 {
   custom_print("virStorageBackendVicinityRegister called");
-  return virStorageBackendRegister(&virStorageBackendVicinity);   // Find this function call!
+  return virStorageBackendRegister(&virStorageBackendVicinity);
 }
