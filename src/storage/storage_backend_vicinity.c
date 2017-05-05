@@ -141,69 +141,50 @@ virStorageBackendVicinityCreateVol(virConnectPtr conn ATTRIBUTE_UNUSED,
                                   virStoragePoolObjPtr pool,
                                   virStorageVolDefPtr vol)
 {
-    virCommandPtr cmd = NULL;
+  virCommandPtr cmd = NULL;
 
-    custom_print("virStorageBackendVicinityCreateVol called");
+  custom_print("virStorageBackendVicinityCreateVol called");
 
-    if (vol->target.encryption != NULL) {
-	virReportError(VIR_ERR_CONFIG_UNSUPPORTED, "%s",
-			_("storage pool does not support encrypted "
-				"volumes"));
-	return -1;
-    }
-
-
-    if (!vol->target.capacity) {
-        virReportError(VIR_ERR_NO_SUPPORT, "%s",
-                       _("volume capacity required for this storage pool"));
-        return -1;
-    }
+  if (vol->target.encryption != NULL) {
+    virReportError(VIR_ERR_CONFIG_UNSUPPORTED, "%s",
+        _("storage pool does not support encrypted "
+        "volumes"));
+    return -1;
+  }
 
 
+  if (!vol->target.capacity) {
+    virReportError(VIR_ERR_NO_SUPPORT, "%s", _("volume capacity required for this storage pool"));
+    return -1;
+  }
 
-    cmd = virCommandNewArgList("/usr/iof/iof_glue.sh",
-				"create", 
-				pool->def->source.name,
-				vol->name,
-				NULL);
-
+  cmd = virCommandNewArgList("/usr/iof/iof_glue.sh", "create", pool->def->source.name, vol->name, NULL);
 
 	//conversion was from Kilobytes, fix this!
-    virCommandAddArgFormat(cmd, "%llu",
-                               VIR_DIV_UP(vol->target.capacity
-                                          ? vol->target.capacity : 1, 1024));
-        
+  virCommandAddArgFormat(cmd, "%llu", VIR_DIV_UP(vol->target.capacity ? vol->target.capacity : 1, 1024));
 
+  if (virCommandRun(cmd, NULL) < 0) {
+    custom_print("Failed to run command");
+    return -1;
+  }
 
+  VIR_FREE(vol->target.path);
+  if(virAsprintf(&vol->target.path, "%s/%s", pool->def->source.name, vol->name) == -1) {
+    custom_print("Failed to set target path");
+    return -1;
+  }
 
-    if (virCommandRun(cmd, NULL) < 0) {
-      custom_print("Failed to run command");
-      return -1;
-    }
+  VIR_FREE(vol->key);
+  if (virAsprintf(&vol->key, "%s/%s", pool->def->source.name, vol->name) == -1) {
+    custom_print("Failed to set volume key");
+    return -1;
+  }
 
-    VIR_FREE(vol->target.path);
-    if(virAsprintf(&vol->target.path, "%s/%s",
-		pool->def->source.name,
-		vol->name) == -1) {
-        custom_print("Failed to set target path");
-	return -1;
-    }
+  virCommandFree(cmd);
+  cmd = NULL;
 
-    VIR_FREE(vol->key);
-    if (virAsprintf(&vol->key, "%s/%s",
-		pool->def->source.name,
-		vol->name) == -1) {
-        custom_print("Failed to set volume key");
-	return -1;
-    }
-
-    virCommandFree(cmd);
-    cmd = NULL;
-
-    return 0;
+  return 0;
 }
-
-
 
 
 static int
