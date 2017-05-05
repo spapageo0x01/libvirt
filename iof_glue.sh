@@ -19,7 +19,9 @@ echo "volume size: $volume_size" >> /usr/iof/temp
 
 if [ $op == "create" ];then
 	echo "create" >> /usr/iof/temp
-	#TODO: Call iofsh with proper arguments
+	
+	iofsh /volumes/ add volume_name=$volume_name replicas=2 access_type=converged export_type=block volume_type=manual add_devices=all capacity=$volume_size
+
 	exit 0
 fi
 
