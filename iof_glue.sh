@@ -6,16 +6,16 @@
 #	exit 1
 #fi
 
-MONITOR_IP=172.16.0.31
-MONITOR_PORT=1340
+MONITOR_IP=$1
+MONITOR_PORT=$2
+op=$3 # create/delete
+pool=$4 # pool name
+volume_name=$5
+volume_size=$6
 
-op=$1 # create/delete
-pool=$2 # pool name
-volume_name=$3 
-volume_size=$4
-
-
-echo "op: $op" > /usr/iof/temp
+echo "monitor ip: $MONITOR_IP" > /usr/iof/temp
+echo "monitor port: $MONITOR_PORT" >> /usr/iof/temp
+echo "op: $op" >> /usr/iof/temp
 echo "pool name: $pool" >> /usr/iof/temp
 echo "volume name: $volume_name" >> /usr/iof/temp
 echo "volume size: $volume_size" >> /usr/iof/temp

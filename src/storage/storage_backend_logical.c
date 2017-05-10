@@ -896,8 +896,6 @@ static int
 virStorageBackendLogicalStopPool(virConnectPtr conn ATTRIBUTE_UNUSED,
                                  virStoragePoolObjPtr pool)
 {
-    virReportError(VIR_ERR_NO_SUPPORT, "SPAPAGEO\n");
-    
     if (virStorageBackendLogicalSetActive(pool, 0) < 0)
         return -1;
 
@@ -914,8 +912,6 @@ virStorageBackendLogicalDeletePool(virConnectPtr conn ATTRIBUTE_UNUSED,
     int ret = -1;
 
     virCheckFlags(0, -1);
-
-    virReportError(VIR_ERR_NO_SUPPORT, "SPAPAGEO\n");
 
     /* first remove the volume group */
     cmd = virCommandNewArgList(VGREMOVE,
@@ -946,8 +942,6 @@ virStorageBackendLogicalDeleteVol(virConnectPtr conn ATTRIBUTE_UNUSED,
 
     virCommandPtr lvchange_cmd = NULL;
     virCommandPtr lvremove_cmd = NULL;
-
-    virReportError(VIR_ERR_NO_SUPPORT, "SPAPAGEO\n");
 
     virCheckFlags(0, -1);
 
@@ -984,7 +978,6 @@ virStorageBackendLogicalCreateVol(virConnectPtr conn,
     struct stat sb;
     bool created = false;
 
-    virReportError(VIR_ERR_NO_SUPPORT, "SPAPAGEO\n");
     if (vol->target.encryption != NULL) {
         virReportError(VIR_ERR_CONFIG_UNSUPPORTED,
                        "%s", _("storage pool does not support encrypted "
@@ -1084,7 +1077,6 @@ virStorageBackendLogicalBuildVolFrom(virConnectPtr conn,
                                      unsigned int flags)
 {
     virStorageBackendBuildVolFrom build_func;
-    virReportError(VIR_ERR_NO_SUPPORT, "SPAPAGEO\n");
     build_func = virStorageBackendGetBuildVolFromFunction(vol, inputvol);
     if (!build_func)
         return -1;
@@ -1144,6 +1136,5 @@ virStorageBackend virStorageBackendLogical = {
 int
 virStorageBackendLogicalRegister(void)
 {
-    virReportError(VIR_ERR_NO_SUPPORT, "SPAPAGEO\n");
     return virStorageBackendRegister(&virStorageBackendLogical);
 }
