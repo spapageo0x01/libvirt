@@ -35,7 +35,7 @@ if [ $op == "create" ];then
 	exit 0
 fi
 
-if [ $op == "delete" ];
+if [ $op == "delete" ];then
 	echo "delete" >> /usr/iof/temp
 
 	#stop volume
