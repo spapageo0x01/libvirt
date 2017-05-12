@@ -98,10 +98,6 @@ struct _virStoragePoolSource {
     // Pool type specific format such as filesystem type, or lvm version, etc.
     int format;
 };*/
-
-
-
-
 static int
 virStorageBackendVicinityStartPool(virConnectPtr conn ATTRIBUTE_UNUSED,
                                   virStoragePoolObjPtr pool)
@@ -118,8 +114,8 @@ virStorageBackendVicinityStartPool(virConnectPtr conn ATTRIBUTE_UNUSED,
     return -1;
   }
 
-
  ///////Prints for testing purposes
+  /*
   for (i = 0; i < source->nhost; i++) {
     if (source->hosts[i].name != NULL) {
       custom_print(source->hosts[i].name);
@@ -135,6 +131,7 @@ virStorageBackendVicinityStartPool(virConnectPtr conn ATTRIBUTE_UNUSED,
     custom_print(source->auth->username);
     custom_print(source->auth->secrettype);
   }
+  */
   /////////////////////////////////
   if (source->hosts[0].port == 0) {
      source->hosts[0].port = VICINITY_DEFAULT_MONITOR_PORT;
