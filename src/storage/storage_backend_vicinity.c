@@ -182,25 +182,46 @@ virStorageBackendVicinityDeleteVol(virConnectPtr conn ATTRIBUTE_UNUSED,
                                   virStorageVolDefPtr vol ATTRIBUTE_UNUSED,
                                   unsigned int flags ATTRIBUTE_UNUSED)
 {
-    custom_print("virStorageBackendVicinityDeleteVol called");
-    return 0;
+  virCommandPtr cmd = NULL;
+  
+  custom_print("virStorageBackendVicinityDeleteVol called");
+
+  // MONITOR_IP=$1
+  // MONITOR_PORT=$2
+  // op=$3 # create/delete
+  // pool=$4 # pool name
+  // volume_name=$5
+
+  custom_print(pool->def->source.hosts[0].name);
+  cmd = virCommandNewArgList("/usr/iof/iof_glue.sh", pool->def->source.hosts[0].name, NULL);
+  virCommandAddArgFormat(cmd, "%d", pool->def->source.hosts[0].port);
+  virCommandAddArgList(cmd, "delete", pool->def->source.name, vol->name, NULL);
+
+  if (virCommandRun(cmd, NULL) < 0) {
+    custom_print("Failed to run command");
+    return -1;
+  }
+
+  VIR_FREE(vol->target.path);
+  if(virAsprintf(&vol->target.path, "%s/%s", pool->def->source.name, vol->name) == -1) {
+    custom_print("Failed to set target path");
+    return -1;
+  }
+
+  VIR_FREE(vol->key);
+  if (virAsprintf(&vol->key, "%s/%s", pool->def->source.name, vol->name) == -1) {
+    custom_print("Failed to set volume key");
+    return -1;
+  }
+
+  virCommandFree(cmd);
+  cmd = NULL;
+
+  return 0;
 }
 
-/*
-typedef struct _virStorageVolDef virStorageVolDef;
-typedef virStorageVolDef *virStorageVolDefPtr;
-struct _virStorageVolDef {
-    char *name;
-    char *key;
-    int type; // virStorageVolType
 
-    bool building;
-    unsigned int in_use;
 
-    virStorageVolSource source;
-    virStorageSource target;
-};
-*/
 static int
 virStorageBackendVicinityCreateVol(virConnectPtr conn ATTRIBUTE_UNUSED,
                                   virStoragePoolObjPtr pool,

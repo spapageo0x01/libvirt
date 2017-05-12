@@ -13,12 +13,12 @@ pool=$4 # pool name
 volume_name=$5
 volume_size=$6
 
-echo "monitor ip: $MONITOR_IP" > /usr/iof/temp
-echo "monitor port: $MONITOR_PORT" >> /usr/iof/temp
-echo "op: $op" >> /usr/iof/temp
-echo "pool name: $pool" >> /usr/iof/temp
-echo "volume name: $volume_name" >> /usr/iof/temp
-echo "volume size: $volume_size" >> /usr/iof/temp
+#echo "monitor ip: $MONITOR_IP" > /usr/iof/temp
+#echo "monitor port: $MONITOR_PORT" >> /usr/iof/temp
+#echo "op: $op" >> /usr/iof/temp
+#echo "pool name: $pool" >> /usr/iof/temp
+#echo "volume name: $volume_name" >> /usr/iof/temp
+#echo "volume size: $volume_size" >> /usr/iof/temp
 
 if [ $op == "create" ];then
 	echo "create" >> /usr/iof/temp
