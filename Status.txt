@@ -1,0 +1,10 @@
+-Create Vicinity type pool. Takes monitor IP and port as arguments.
+-Destroy pool is no-op currently (no need to clean-up state)
+-Start/stop block volume. Can only specify volume name and size currently.
+An external script is called to handle these operations. Assumption: devices
+are activated prior to running this.
+
+*All operations are done through virsh
+*Virtmanager UI does recognize vicinity pools/volumes created through virsh, but cannot
+be used to modify them.
+
